@@ -1,86 +1,119 @@
-# SmartSure - Insurance Management System
+# 🛡️ SmartSure - Insurance Management System
 
-SmartSure is a modern, microservices-based Insurance Management System designed to handle insurance policies, claims, and administrative tasks efficiently. Built using Spring Boot and Spring Cloud, it leverages a robust architecture to ensure scalability, reliability, and security.
+![Project Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
+![Tech Stack](https://img.shields.io/badge/Stack-Microservices-blue?style=for-the-badge)
+![Security](https://img.shields.io/badge/Security-JWT%20%2B%20Spring%20Security-red?style=for-the-badge)
 
-## Architecture Overview
+**SmartSure** is a state-of-the-art, microservices-based insurance management platform. It provides a seamless experience for customers to browse policies, purchase insurance, and file claims, while giving administrators powerful tools for reviewing applications and generating financial reports.
 
-The system is composed of several microservices, each responsible for a specific domain:
+---
 
-- **Auth Service**: Handles user registration, authentication, and JWT-based authorization.
-- **Policy Service**: Manages insurance policies, including creation, updates, and retrieval.
-- **Claims Service**: Processes and manages insurance claims.
-- **Admin Service**: Provides administrative tools for user and system management.
-- **API Gateway**: The entry point for all client requests, providing routing and security.
-- **Eureka Server**: Service discovery registry for all microservices.
-- **Config Server**: Centralized configuration management across all environments.
+## 🏗️ System Architecture
 
-## Inter-Service Communication
+SmartSure is built on a highly decoupled architecture using **Spring Boot 3.5.x** and **Spring Cloud**. All services are containerized and communicate through a secure, orchestrated network.
 
-The SmartSure ecosystem relies on **Spring Cloud OpenFeign** for declarative REST client communication between microservices. This ensures that services can easily call each other without manual HTTP client configuration.
+### 🧩 Microservices Overview
+- **🛡️ Auth Service (8002)**: Handles user registration, JWT-based authentication, and OTP-verified registration.
+- **💼 Policy Service (8004)**: Manages the policy catalog (Health, Vehicle, Life), policy purchasing, and user-to-policy mapping.
+- **📄 Claims Service (8003)**: Manages the lifecycle of insurance claims, including document uploads and status tracking.
+- **👔 Admin Service (8001)**: Orchestrates administrative reviews, policy CRUD, and cross-service reporting.
+- **💳 Payment Service (8085)**: Integrated with **Razorpay** for secure premium payments and order tracking.
+- **🔔 Notification Service (8006)**: An asynchronous service that handles email notifications (Policy Purchase, Cancellation, OTPs) using **RabbitMQ** and **SMTP**.
 
-- **Admin Service** uses Feign Clients to interact with the **Policy Service** and **Claims Service** to fetch statistics and manage records.
-- Service discovery is handled automatically through **Eureka integration**.
+### ⚙️ Infrastructure & Cloud
+- **🚦 API Gateway (8888)**: The centralized entry point with `JwtAuthenticationFilter` and route validation.
+- **📡 Eureka Server (8761)**: Service discovery registry for dynamic networking.
+- **📁 Config Server (9999)**: Centralized configuration management using the Native profile (linked to a Git repository).
+- **📝 RabbitMQ (5672)**: Messaging broker for asynchronous notifications and inter-service events.
 
-##  Resilience & Fault Tolerance
+---
 
-To ensure high availability and stability, especially during network fluctuations or service downtime, the system implements a robust **Retry Mechanism** using **Spring Retry**.
+## 🛠️ Technology Stack
 
-### **Retry Strategy**
-Applied specifically in the `AdminService` for all cross-service operations:
-- **Max Attempts**: 3 attempts (1 initial + 2 retries).
-- **Backoff Policy**: Exponential backoff with a **2000ms (2 seconds)** delay between attempts.
-- **Fallback (Recover)**: Each retryable method is paired with a `@Recover` method that provides a graceful fallback (e.g., returning default values or a meaningful error message) if all retry attempts fail.
+### **Frontend**
+- **Core**: React 19 (TypeScript), Vite
+- **Styling**: TailwindCSS 4 (Premium Modern UI)
+- **State Management**: Redux Toolkit & RTK Query
+- **Animations**: Framer Motion
+- **Performance**: Optimized with **Route-based Lazy Loading** for fast initial paints.
 
-##  Tech Stack
-
+### **Backend**
 - **Framework**: Spring Boot 3.5.x
-- **Microservices**: Spring Cloud (Eureka, Config, Gateway, OpenFeign)
-- **Database**: PostgreSQL
-- **Security**: Spring Security & JWT (JSON Web Token)
-- **Resilience**: Spring Retry & AOP
-- **API Documentation**: SpringDoc OpenAPI / Swagger UI
-- **Build Tool**: Maven
-- **Language**: Java 17
+- **Microservices**: Spring Cloud (Gateway, Eureka, Config, Feign)
+- **Security**: JWT (jjwt 0.12.6), Spring Security, BCrypt
+- **Persistence**: PostgreSQL 16 (Main Data Store), Redis (Caching)
+- **Communication**: OpenFeign (Synchronous), RabbitMQ (Asynchronous)
+- **Monitoring**: Actuator, Prometheus, Micrometer
 
-##  Getting Started
+### **Observability & DevOps**
+- **Logging**: ELK Stack (Elasticsearch, Logstash, Kibana)
+- **Tracing**: Zipkin (Distributed tracing via MySQL storage)
+- **Metrics**: Prometheus & Grafana (Real-time JVM and request tracking)
+- **Containerization**: Docker & Docker Compose
 
-### Prerequisites
+---
 
-- Java 17 or higher
-- PostgreSQL
-- Maven 3.x
+## ✨ Key Features & Optimizations
 
-### Running the System
+- **⚡ High Performance**: Implemented **Code Splitting** in the frontend, ensuring only necessary code is loaded per route.
+- **✉️ Async Communications**: Policy confirmations and OTP emails are processed via background RabbitMQ tasks, ensuring the main application remains responsive.
+- **🔒 Multi-Layer Security**: 
+  - **Gateway Layer**: JWT validation and header injection.
+  - **Network Layer**: `X-Gateway-Secret` validation to block direct access to internal microservices.
+  - **Method Layer**: Fine-grained `@PreAuthorize` controls.
+- **💰 Razorpay Integration**: Fully functional payment gateway for policy purchases.
+- **🛡️ Resilience**: Implemented **Spring Retry** in the Admin orchestrator for fault-tolerant cross-service calls.
 
-To run the entire system locally, follow these steps in order:
+---
 
-1.  **Start Config Server**: Ensure all microservices can fetch their configuration.
-2.  **Start Eureka Server**: Allow microservices to register themselves.
-3.  **Start Auth Service**: Required for authentication.
-4.  **Start other Services**: `policy-service`, `claims-service`, `admin-service`.
-5.  **Start API Gateway**: Access the services through the gateway.
+## 🚀 Getting Started
 
-Each service can be started by running:
+### 📋 Prerequisites
+- **Java 17+**
+- **Node.js 20+**
+- **Docker & Docker Compose**
+- **Maven 3.9+**
+
+### 🐳 Running with Docker (Recommended)
+The entire ecosystem (DBs, RabbitMQ, Redis, 8 Microservices, and Frontend) can be started with a single command:
+
 ```bash
-mvn spring-boot:run
+docker-compose up -d --build
 ```
 
-## Project Structure
+### 💻 Local Development Setup
+1. **Start Infrastructure**: Ensure Postgres, RabbitMQ, and Redis are running.
+2. **Start Discovery & Config**: Launch `eureka-server` and `config-server` first.
+3. **Start Authentication**: Launch `auth-service`.
+4. **Launch Business Services**: `policy`, `claims`, `admin`, `payment`, `notification`.
+5. **Start Gateway**: Launch `api-gateway` (8888).
+6. **Frontend**:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
+---
+
+## 📂 Project Structure
 ```text
-├── admin-service/    # Administration logic (Feign + Retry implementation)
-├── api-gateway/      # Routing and security entry point
-├── auth-service/     # Authentication and JWT logic
-├── claims-service/   # Claims management
-├── config-server/    # Centralized configuration
-├── eureka-server/    # Service registry
-├── policy-service/   # Policy management
-└── docs/             # Documentation and API specs
+├── .agents/              # AI configuration and skills
+├── backend/
+│   ├── admin-service/    # Admin orchestrator
+│   ├── api-gateway/      # Routing & Security
+│   ├── auth-service/     # Identity & Access
+│   ├── claims-service/   # Claims Lifecycle
+│   ├── config-server/    # Service Configs
+│   ├── eureka-server/    # Service Registry
+│   ├── notification/     # SMTP & Messaging
+│   ├── payment-service/  # Razorpay integration
+│   ├── policy-service/   # Policy Catalog
+│   └── docs/             # Architecture (HLD/LLD) & API Specs
+├── docker/               # Initialization scripts & Logstash config
+├── frontend/             # React + Vite application
+└── docker-compose.yml    # Full stack orchestration
 ```
-
-## Security
-
-All requests to the backend services (except for registration and login) must be authenticated via a JWT token. The token is obtained from the `auth-service` and should be included in the `Authorization` header as a `Bearer` token.
 
 ---
 © 2026 SmartSure Insurance Management System.
