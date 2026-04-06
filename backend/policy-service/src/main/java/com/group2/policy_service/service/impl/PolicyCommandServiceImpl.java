@@ -119,13 +119,13 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                     user.getName(), policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate()
                 );
                 
-                // Primary: Feign
+                // Asynchronous Notification via RabbitMQ
                 try {
-                    notificationClient.sendEmail(new EmailRequest(user.getEmail(), subject, htmlBody));
-                    log.info("📧 Policy purchase notification sent via Feign to: {}", user.getEmail());
-                } catch (Exception feignEx) {
                     NotificationEvent event = new NotificationEvent(user.getEmail(), subject, htmlBody);
                     rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
+                    log.info("📧 Policy purchase notification request queued via RabbitMQ for: {}", user.getEmail());
+                } catch (Exception rabbitEx) {
+                    log.error("Failed to queue notification: {}", rabbitEx.getMessage());
                 }
             }
         } catch (Exception e) {
@@ -175,13 +175,13 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                 "</div></div></body></html>",
                 user.getName(), userPolicy.getPolicy().getPolicyName()
             );
+            // Asynchronous Cancellation Notification via RabbitMQ
             try {
-                notificationClient.sendEmail(new EmailRequest(user.getEmail(), subject, htmlBody));
-                log.info("📧 Cancellation request notification sent via Feign to: {}", user.getEmail());
-            } catch (Exception feignEx) {
-                log.warn("⚠️ Cancellation request email failed (Feign), falling back to RabbitMQ: {}", feignEx.getMessage());
                 NotificationEvent event = new NotificationEvent(user.getEmail(), subject, htmlBody);
                 rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
+                log.info("📧 Cancellation request notification queued via RabbitMQ for: {}", user.getEmail());
+            } catch (Exception rabbitEx) {
+                log.error("Failed to queue cancellation notification: {}", rabbitEx.getMessage());
             }
         } catch (Exception e) {
             log.error("Failed to process cancellation request notification: {}", e.getMessage());
@@ -237,12 +237,13 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                 );
                 
                 // Direct Feign
+                // Asynchronous Cancellation Approval Notification via RabbitMQ
                 try {
-                    notificationClient.sendEmail(new EmailRequest(user.getEmail(), subject, htmlBody));
-                    log.info("📧 Policy cancellation approval sent via Feign to: {}", user.getEmail());
-                } catch (Exception feignEx) {
                     NotificationEvent evt = new NotificationEvent(user.getEmail(), subject, htmlBody);
                     rabbitTemplate.convertAndSend("notification.exchange", "notification.email", evt);
+                    log.info("📧 Cancellation approval notification queued via RabbitMQ for: {}", user.getEmail());
+                } catch (Exception rabbitEx) {
+                    log.error("Failed to queue cancellation approval notification: {}", rabbitEx.getMessage());
                 }
             }
         } catch(Exception e) {
@@ -332,12 +333,13 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                     user.getName(), userPolicy.getPolicy().getPolicyName(), amount, userPolicy.getOutstandingBalance()
                 );
                 
+                // Asynchronous Payment Notification via RabbitMQ
                 try {
-                    notificationClient.sendEmail(new EmailRequest(user.getEmail(), subject, htmlBody));
-                    log.info("📧 Payment confirmation notification sent via Feign to: {}", user.getEmail());
-                } catch (Exception feignEx) {
                     NotificationEvent event = new NotificationEvent(user.getEmail(), subject, htmlBody);
                     rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
+                    log.info("📧 Payment confirmation notification queued via RabbitMQ for: {}", user.getEmail());
+                } catch (Exception rabbitEx) {
+                    log.error("Failed to queue payment notification: {}", rabbitEx.getMessage());
                 }
             }
         } catch (Exception e) {

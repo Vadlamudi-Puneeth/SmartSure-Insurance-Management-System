@@ -19,6 +19,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - private-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -34,6 +36,8 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+    networks:
+      - private-network
 
   redis:
     image: redis:7-alpine
@@ -45,11 +49,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - private-network
 
   # 2. SPRING CLOUD
   eureka-server:
     build: ./backend/eureka-server
+    image: ${DOCKER_USERNAME}/smartsure-eureka-server:latest
     container_name: eureka-server
+    env_file: .env
     ports:
       - "8761:8761"
     environment:
@@ -61,15 +69,23 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
+    networks:
+      - private-network
+      - proxy-network
 
   config-server:
     build: ./backend/config-server
+    image: ${DOCKER_USERNAME}/smartsure-config-server:latest
     container_name: config-server
+    env_file: .env
     ports:
       - "9999:9999"
+    extra_hosts:
+      - "github.com:20.207.73.82"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_CLOUD_CONFIG_ENABLED=false
+      - SPRING_PROFILES_ACTIVE=docker,git
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_URI=https://github.com/Vadlamudi-Puneeth/configurations.git
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_DEFAULT_LABEL=main
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
     depends_on:
       eureka-server:
@@ -79,11 +95,15 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
+    networks:
+      - private-network
 
   # 3. MICROSERVICES
   auth-service:
     build: ./backend/auth-service
+    image: ${DOCKER_USERNAME}/smartsure-auth-service:latest
     container_name: auth-service
+    env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - CONFIG_SERVER_URL=http://config-server:9999
@@ -95,10 +115,14 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    networks:
+      - private-network
 
   admin-service:
     build: ./backend/admin-service
+    image: ${DOCKER_USERNAME}/smartsure-admin-service:latest
     container_name: admin-service
+    env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - CONFIG_SERVER_URL=http://config-server:9999
@@ -112,10 +136,14 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    networks:
+      - private-network
 
   policy-service:
     build: ./backend/policy-service
+    image: ${DOCKER_USERNAME}/smartsure-policy-service:latest
     container_name: policy-service
+    env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - CONFIG_SERVER_URL=http://config-server:9999
@@ -127,10 +155,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - private-network
 
   claims-service:
     build: ./backend/claims-service
+    image: ${DOCKER_USERNAME}/smartsure-claims-service:latest
     container_name: claims-service
+    env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - CONFIG_SERVER_URL=http://config-server:9999
@@ -140,10 +172,14 @@ services:
     depends_on:
       config-server:
         condition: service_healthy
+    networks:
+      - private-network
 
   payment-service:
     build: ./backend/payment-service
+    image: ${DOCKER_USERNAME}/smartsure-payment-service:latest
     container_name: payment-service
+    env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - CONFIG_SERVER_URL=http://config-server:9999
@@ -153,10 +189,14 @@ services:
     depends_on:
       config-server:
         condition: service_healthy
+    networks:
+      - private-network
 
   notification-service:
     build: ./backend/notification-service
+    image: ${DOCKER_USERNAME}/smartsure-notification-service:latest
     container_name: notification-service
+    env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - CONFIG_SERVER_URL=http://config-server:9999
@@ -168,11 +208,15 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    networks:
+      - private-network
 
   # 4. API GATEWAY
   api-gateway:
     build: ./backend/api-gateway
+    image: ${DOCKER_USERNAME}/smartsure-api-gateway:latest
     container_name: api-gateway
+    env_file: .env
     ports:
       - "8888:8888"
     environment:
@@ -184,18 +228,22 @@ services:
     depends_on:
       config-server:
         condition: service_healthy
+    networks:
+      - private-network
+      - proxy-network
 
   # 5. FRONTEND
   frontend:
     build: ./frontend
+    image: ${DOCKER_USERNAME}/smartsure-frontend:latest
     container_name: frontend
     ports:
       - "3000:80"
     depends_on:
       - api-gateway
-
-volumes:
-  postgres-data:
+    networks:
+      - private-network
+      - proxy-network
 
   # 6. LOGGING (ELK STACK)
   elasticsearch:
@@ -207,6 +255,8 @@ volumes:
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
+    networks:
+      - private-network
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.15.0
@@ -217,3 +267,96 @@ volumes:
       - "5044:5044"
     depends_on:
       - elasticsearch
+    networks:
+      - private-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - private-network
+      - proxy-network
+
+  # 7. OBSERVABILITY (Metrics & Tracing)
+  zipkin-mysql:
+    image: mysql:8.0
+    container_name: zipkin-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: zipkin_root_pass
+      MYSQL_DATABASE: zipkin
+      MYSQL_USER: zipkin_user
+      MYSQL_PASSWORD: zipkin_pass
+    volumes:
+      - zipkin-mysql-data:/var/lib/mysql
+    networks:
+      - private-network
+    command: --default-authentication-plugin=mysql_native_password
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    environment:
+      STORAGE_TYPE: mysql
+      MYSQL_HOST: zipkin-mysql
+      MYSQL_TCP_PORT: 3306
+      MYSQL_USER: zipkin_user
+      MYSQL_PASS: zipkin_pass
+      MYSQL_DB: zipkin
+    depends_on:
+      - zipkin-mysql
+    ports:
+      - "9411:9411"
+    networks:
+      - private-network
+      - proxy-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - private-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - private-network
+      - proxy-network
+
+networks:
+  private-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
+    name: smartsure-private
+  proxy-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
+    name: smartsure-proxy
+
+volumes:
+  postgres-data:
+  zipkin-mysql-data:
+  prometheus-data:
+  grafana-data:

@@ -1,6 +1,7 @@
 package com.group2.notification_service.service.impl;
 
 import com.group2.notification_service.service.INotificationService;
+import org.springframework.scheduling.annotation.Async;
 
 import java.time.LocalDateTime;
 import java.util.Random;
@@ -45,6 +46,8 @@ public class NotificationServiceImpl implements INotificationService {
         this.javaMailSender = javaMailSender;
     }
 
+    @Override
+    @Async
     public void sendOtp(String email) {
         log.info("Sending OTP via Brevo to email: {}", email);
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
@@ -112,6 +115,8 @@ public class NotificationServiceImpl implements INotificationService {
         return true;
     }
 
+    @Override
+    @Async
     public void sendGeneralEmail(String to, String subject, String body) {
         log.info("Sending status notification via SMTP (HTML support) to: {}, Subject: {}", to, subject);
         try {
