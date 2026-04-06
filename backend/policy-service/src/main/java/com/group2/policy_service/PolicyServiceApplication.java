@@ -13,11 +13,14 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
+import org.springframework.scheduling.annotation.EnableAsync;
+
 @SpringBootApplication
 @EnableDiscoveryClient
 @EnableScheduling
 @EnableCaching
 @EnableFeignClients
+@EnableAsync
 @OpenAPIDefinition(servers = @Server(url = "/policy-service", description = "Policy Service via API Gateway"))
 public class PolicyServiceApplication {
 

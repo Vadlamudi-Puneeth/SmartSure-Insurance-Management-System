@@ -21,12 +21,10 @@ import com.group2.notification_service.repository.OtpRepository;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import jakarta.mail.internet.MimeMessage;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.*;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 @Service
 @Transactional
-@Slf4j
 public class NotificationServiceImpl implements INotificationService {
 	
 	private static final Logger log = LoggerFactory.getLogger(NotificationServiceImpl.class);

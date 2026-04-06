@@ -7,11 +7,10 @@ import com.group2.notification_service.config.RabbitMQConfig;
 import com.group2.notification_service.dto.NotificationEvent;
 import com.group2.notification_service.service.INotificationService;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.slf4j.*;
 @Component
-@Slf4j
 public class NotificationEventListener {
 
     private final INotificationService notificationService;

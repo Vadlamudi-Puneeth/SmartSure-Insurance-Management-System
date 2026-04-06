@@ -28,6 +28,9 @@ export default function Login() {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: sessionStorage.getItem('rememberedEmail') || ''
+    }
   });
 
   const onSubmit = async (data: LoginFormValues) => {
@@ -106,12 +109,16 @@ export default function Login() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <HiMail className="w-5 h-5" style={{ color: 'var(--color-text-secondary)' }} />
                 </div>
-                <input
-                  id="login-email"
-                  type="email"
-                  {...register('email')}
-                  placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all focus:ring-2"
+                  <input
+                    id="login-email"
+                    type="email"
+                    {...register('email')}
+                    onChange={(e) => {
+                      register('email').onChange(e);
+                      sessionStorage.setItem('rememberedEmail', e.target.value);
+                    }}
+                    placeholder="you@example.com"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all focus:ring-2"
                   style={{
                     backgroundColor: 'var(--color-bg)',
                     border: '1px solid var(--color-border)',

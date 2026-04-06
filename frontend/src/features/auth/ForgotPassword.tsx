@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
 export default function ForgotPassword() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => sessionStorage.getItem('rememberedEmail') || '');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -14,7 +14,7 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const validatePassword = (password) => {
+  const validatePassword = (password: string) => {
     const minLength = 8;
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
@@ -30,7 +30,7 @@ export default function ForgotPassword() {
     return null;
   };
 
-  const handleSendOtp = async (e) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return toast.error('Please enter your email');
     setLoading(true);
@@ -38,7 +38,7 @@ export default function ForgotPassword() {
       await authAPI.forgotPasswordSendOtp(email);
       toast.success('OTP sent to your email');
       setStep(2);
-    } catch (err) {
+    } catch (err: any) {
       const errorMsg = err.response?.data || 'User not found';
       toast.error(typeof errorMsg === 'string' ? errorMsg : (errorMsg.message || 'User not found'));
     } finally {
@@ -46,7 +46,7 @@ export default function ForgotPassword() {
     }
   };
 
-  const handleVerifyAndReset = async (e) => {
+  const handleVerifyAndReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otp || !newPassword || !confirmPassword) return toast.error('Please fill in all fields');
     
@@ -63,7 +63,7 @@ export default function ForgotPassword() {
       await authAPI.resetPassword({ email, newPassword });
       toast.success('Password reset successfully!');
       navigate('/login');
-    } catch (err) {
+    } catch (err: any) {
       const errorMsg = err.response?.data || 'Invalid OTP or session expired';
       toast.error(typeof errorMsg === 'string' ? errorMsg : (errorMsg.message || 'Invalid OTP or session expired'));
     } finally {
@@ -103,7 +103,7 @@ export default function ForgotPassword() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2"
-                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', '--tw-ring-color': 'var(--color-primary)' }}
+                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                     placeholder="you@example.com"
                   />
                 </div>
@@ -130,7 +130,7 @@ export default function ForgotPassword() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2 tracking-[0.2em] font-mono text-center"
-                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', '--tw-ring-color': 'var(--color-primary)' }}
+                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                     placeholder="000000"
                     maxLength={6}
                   />
@@ -148,7 +148,7 @@ export default function ForgotPassword() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2"
-                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', '--tw-ring-color': 'var(--color-primary)' }}
+                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                     placeholder="Enter new password"
                   />
                 </div>
@@ -165,7 +165,7 @@ export default function ForgotPassword() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2"
-                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', '--tw-ring-color': 'var(--color-primary)' }}
+                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
                     placeholder="Confirm new password"
                   />
                 </div>

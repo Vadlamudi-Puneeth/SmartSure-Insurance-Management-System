@@ -40,8 +40,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
     private final UserPolicyRepository userPolicyRepository;
     private final PolicyTypeRepository policyTypeRepository;
     private final PolicyMapper mapper;
-    private final AuthClient authClient;
-    private final NotificationClient notificationClient;
+    private final AsyncNotificationService asyncNotificationService;
     private final RabbitTemplate rabbitTemplate;
     
     private static final Logger log = LoggerFactory.getLogger(PolicyCommandServiceImpl.class);
@@ -50,15 +49,13 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                                UserPolicyRepository userPolicyRepository,
                                PolicyTypeRepository policyTypeRepository,
                                PolicyMapper mapper,
-                               AuthClient authClient,
-                               NotificationClient notificationClient,
+                               AsyncNotificationService asyncNotificationService,
                                RabbitTemplate rabbitTemplate) {
         this.policyRepository = policyRepository;
         this.userPolicyRepository = userPolicyRepository;
         this.policyTypeRepository = policyTypeRepository;
         this.mapper = mapper;
-        this.authClient = authClient;
-        this.notificationClient = notificationClient;
+        this.asyncNotificationService = asyncNotificationService;
         this.rabbitTemplate = rabbitTemplate;
     }
 
@@ -91,46 +88,8 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
 
         userPolicyRepository.save(userPolicy);
 
-        // Send Purchase Notification
-        try {
-            UserDTO user = authClient.getUserById(userId);
-            if (user != null && user.getEmail() != null) {
-                String subject = "SmartSure: Policy Purchase Successful";
-                String htmlBody = String.format(
-                    "<html><body style='font-family: Arial, sans-serif; color: #333; line-height: 1.6;'>" +
-                    "<div style='max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;'>" +
-                    "<div style='background: #1e3c72; color: white; padding: 20px; text-align: center;'>" +
-                    "<h1 style='margin: 0;'>🛡️ SmartSure</h1>" +
-                    "</div>" +
-                    "<div style='padding: 20px;'>" +
-                    "<h2>Congratulations %s!</h2>" +
-                    "<p>You have successfully purchased a new insurance policy.</p>" +
-                    "<div style='background: #f4f7f6; padding: 15px; border-radius: 5px; border-left: 5px solid #1e3c72;'>" +
-                    "<strong>Policy Name:</strong> %s<br/>" +
-                    "<strong>Premium Amount:</strong> ₹%.2f<br/>" +
-                    "<strong>Coverage:</strong> ₹%.2f<br/>" +
-                    "<strong>Expiry Date:</strong> %s" +
-                    "</div>" +
-                    "<p style='margin-top: 20px;'>Thank you for choosing SmartSure for your protection.</p>" +
-                    "</div>" +
-                    "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
-                    "&copy; 2026 SmartSure Insurance Management System" +
-                    "</div></div></body></html>",
-                    user.getName(), policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate()
-                );
-                
-                // Asynchronous Notification via RabbitMQ
-                try {
-                    NotificationEvent event = new NotificationEvent(user.getEmail(), subject, htmlBody);
-                    rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
-                    log.info("📧 Policy purchase notification request queued via RabbitMQ for: {}", user.getEmail());
-                } catch (Exception rabbitEx) {
-                    log.error("Failed to queue notification: {}", rabbitEx.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to process purchase notification: {}", e.getMessage());
-        }
+        // Send Purchase Notification (Asynchronous)
+        asyncNotificationService.sendPurchaseNotification(userId, policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate());
 
         return mapper.mapToUserPolicyResponse(userPolicy);
     }
@@ -155,37 +114,8 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         userPolicy.setStatus(PolicyStatus.PENDING_CANCELLATION);
         userPolicyRepository.save(userPolicy);
 
-        try {
-            UserDTO user = authClient.getUserById(currentUserId);
-            String subject = "SmartSure: Cancellation Request Received";
-            String htmlBody = String.format(
-                "<html><body style='font-family: Arial, sans-serif; color: #333;'>" +
-                "<div style='max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;'>" +
-                "<div style='background: #e67e22; color: white; padding: 20px; text-align: center;'>" +
-                "<h1 style='margin: 0;'>⚠️ Cancellation Request</h1>" +
-                "</div>" +
-                "<div style='padding: 20px;'>" +
-                "<p>Hello %s,</p>" +
-                "<p>We have received your request to cancel your policy: <strong>%s</strong>.</p>" +
-                "<p>Our administration team is currently reviewing your request. You will be notified once the review is complete.</p>" +
-                "<p>No further action is required from your side at this moment.</p>" +
-                "</div>" +
-                "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
-                "&copy; 2026 SmartSure Insurance Management System" +
-                "</div></div></body></html>",
-                user.getName(), userPolicy.getPolicy().getPolicyName()
-            );
-            // Asynchronous Cancellation Notification via RabbitMQ
-            try {
-                NotificationEvent event = new NotificationEvent(user.getEmail(), subject, htmlBody);
-                rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
-                log.info("📧 Cancellation request notification queued via RabbitMQ for: {}", user.getEmail());
-            } catch (Exception rabbitEx) {
-                log.error("Failed to queue cancellation notification: {}", rabbitEx.getMessage());
-            }
-        } catch (Exception e) {
-            log.error("Failed to process cancellation request notification: {}", e.getMessage());
-        }
+        // Send Cancellation Request Notification (Asynchronous)
+        asyncNotificationService.sendCancellationRequestNotification(currentUserId, userPolicy.getPolicy().getPolicyName());
 
         // Saga Trigger (RabbitMQ - Optional for STS users)
         try {
@@ -215,40 +145,8 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         userPolicy.setStatus(PolicyStatus.CANCELLED);
         userPolicyRepository.save(userPolicy);
 
-        try {
-            UserDTO user = authClient.getUserById(userPolicy.getUserId());
-            if (user != null && user.getEmail() != null) {
-                String subject = "SmartSure: Policy Cancellation Approved";
-                String htmlBody = String.format(
-                    "<html><body style='font-family: Arial, sans-serif; color: #333;'>" +
-                    "<div style='max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;'>" +
-                    "<div style='background: #c0392b; color: white; padding: 20px; text-align: center;'>" +
-                    "<h1 style='margin: 0;'>🚫 Policy Cancelled</h1>" +
-                    "</div>" +
-                    "<div style='padding: 20px;'>" +
-                    "<p>Hello %s,</p>" +
-                    "<p>Your cancellation request for policy <strong>%s</strong> has been <strong>Approved</strong>.</p>" +
-                    "<p>The policy has been successfully terminated. Any associated benefits will no longer be available.</p>" +
-                    "</div>" +
-                    "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
-                    "&copy; 2026 SmartSure Insurance Management System" +
-                    "</div></div></body></html>",
-                    user.getName(), userPolicy.getPolicy().getPolicyName()
-                );
-                
-                // Direct Feign
-                // Asynchronous Cancellation Approval Notification via RabbitMQ
-                try {
-                    NotificationEvent evt = new NotificationEvent(user.getEmail(), subject, htmlBody);
-                    rabbitTemplate.convertAndSend("notification.exchange", "notification.email", evt);
-                    log.info("📧 Cancellation approval notification queued via RabbitMQ for: {}", user.getEmail());
-                } catch (Exception rabbitEx) {
-                    log.error("Failed to queue cancellation approval notification: {}", rabbitEx.getMessage());
-                }
-            }
-        } catch(Exception e) {
-            log.error("Failed to process policy cancellation notification: {}", e.getMessage());
-        }
+        // Send Cancellation Approval Notification (Asynchronous)
+        asyncNotificationService.sendCancellationApprovalNotification(userPolicy.getUserId(), userPolicy.getPolicy().getPolicyName());
 
         return mapper.mapToUserPolicyResponse(userPolicy);
     }
@@ -307,44 +205,8 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         userPolicy.setOutstandingBalance(Math.max(0, currentBalance - amount));
         userPolicyRepository.save(userPolicy);
 
-        // Send Payment Confirmation Email
-        try {
-            UserDTO user = authClient.getUserById(userPolicy.getUserId());
-            if (user != null && user.getEmail() != null) {
-                String subject = "SmartSure: Premium Payment Successful";
-                String htmlBody = String.format(
-                    "<html><body style='font-family: Arial, sans-serif; color: #333;'>" +
-                    "<div style='max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;'>" +
-                    "<div style='background: #27ae60; color: white; padding: 20px; text-align: center;'>" +
-                    "<h1 style='margin: 0;'>💰 Payment Received</h1>" +
-                    "</div>" +
-                    "<div style='padding: 20px;'>" +
-                    "<p>Hello %s,</p>" +
-                    "<p>A premium payment has been successfully processed for your policy: <strong>%s</strong>.</p>" +
-                    "<div style='background: #f4f7f6; padding: 15px; border-radius: 5px; border-left: 5px solid #27ae60;'>" +
-                    "<strong>Amount Paid:</strong> ₹%.2f<br/>" +
-                    "<strong>Remaining Balance:</strong> ₹%.2f" +
-                    "</div>" +
-                    "<p style='margin-top: 20px;'>Thank you for keeping your policy active!</p>" +
-                    "</div>" +
-                    "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
-                    "&copy; 2026 SmartSure Insurance Management System" +
-                    "</div></div></body></html>",
-                    user.getName(), userPolicy.getPolicy().getPolicyName(), amount, userPolicy.getOutstandingBalance()
-                );
-                
-                // Asynchronous Payment Notification via RabbitMQ
-                try {
-                    NotificationEvent event = new NotificationEvent(user.getEmail(), subject, htmlBody);
-                    rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
-                    log.info("📧 Payment confirmation notification queued via RabbitMQ for: {}", user.getEmail());
-                } catch (Exception rabbitEx) {
-                    log.error("Failed to queue payment notification: {}", rabbitEx.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to process payment confirmation notification: {}", e.getMessage());
-        }
+        // Send Payment Confirmation Email (Asynchronous)
+        asyncNotificationService.sendPaymentNotification(userPolicy.getUserId(), userPolicy.getPolicy().getPolicyName(), amount, userPolicy.getOutstandingBalance());
 
         return mapper.mapToUserPolicyResponse(userPolicy);
     }

@@ -1,7 +1,6 @@
 package com.group2.notification_service.controller;
 
 import org.slf4j.Logger;
-import org.slf4j.*;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,11 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.group2.notification_service.dto.EmailRequest;
 import com.group2.notification_service.service.INotificationService;
 
-import lombok.extern.slf4j.Slf4j;
-
 @RestController
 @RequestMapping("/api/notifications")
-@Slf4j
 public class NotificationController {
 
     private final INotificationService notificationService;

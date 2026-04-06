@@ -1,4 +1,4 @@
-package com.group2.admin_service.exception;
+package com.group2.payment_service.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,15 +22,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler(AdminException.class)
-    public ResponseEntity<ErrorDetails> handleAdminException(AdminException exception,
+    @ExceptionHandler(PaymentException.class)
+    public ResponseEntity<ErrorDetails> handlePaymentException(PaymentException exception,
                                                                     WebRequest webRequest) {
-        log.warn("Admin-specific error occurred: {}", exception.getMessage());
+        log.warn("Payment related error occurred: {}", exception.getMessage());
         ErrorDetails errorDetails = new ErrorDetails(
                 LocalDateTime.now(),
                 exception.getMessage(),
                 webRequest.getDescription(false),
-                "ADMIN_ERROR"
+                "PAYMENT_ERROR"
         );
         return new ResponseEntity<>(errorDetails, HttpStatus.BAD_REQUEST);
     }
@@ -38,7 +38,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorDetails> handleGlobalException(Exception exception,
                                                                WebRequest webRequest) {
-        log.error("An unexpected internal server error occurred in Admin Service", exception);
+        log.error("An unexpected internal server error occurred in Payment Service", exception);
         ErrorDetails errorDetails = new ErrorDetails(
                 LocalDateTime.now(),
                 exception.getMessage(),
@@ -53,7 +53,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                   HttpHeaders headers,
                                                                   HttpStatusCode status,
                                                                   WebRequest request) {
-        log.warn("Validation errors in Admin Service: {}", ex.getBindingResult().getErrorCount());
+        log.warn("Validation errors in Payment Service: {}", ex.getBindingResult().getErrorCount());
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
