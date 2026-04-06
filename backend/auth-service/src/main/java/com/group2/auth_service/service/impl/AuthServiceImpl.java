@@ -89,33 +89,49 @@ public class AuthServiceImpl implements IAuthService {
         return authMapper.mapToResponse(userRepository.save(user));
 	}
 
+	@Transactional
 	public AuthResponse login(LoginRequest request) {
 	    String sanitizedEmail = request.getEmail().trim().toLowerCase();
-	    Optional<User> userOpt = userRepository.findByEmail(sanitizedEmail);
+	    User user = userRepository.findByEmail(sanitizedEmail)
+	            .orElseThrow(() -> new RuntimeException("Invalid credentials"));
 	    
-	    if (userOpt.isPresent()) {
-	        User user = userOpt.get();        
-
-	        if (passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-	            String token = jwtUtil.generateToken(user.getEmail(), user.getId(), user.getRole().name());
-	            String refreshToken = jwtUtil.generateRefreshToken(user.getEmail(), user.getId());
-	            return new AuthResponse(token, refreshToken, user.getRole().name(), user.getId());
-	        }
+	    if (passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+	        String token = jwtUtil.generateToken(user.getEmail(), user.getId(), user.getRole().name());
+	        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail(), user.getId());
+	        
+	        user.setRefreshToken(refreshToken);
+	        userRepository.save(user);
+	        
+	        return new AuthResponse(token, refreshToken, user.getRole().name(), user.getId());
 	    }
 	    throw new RuntimeException("Invalid credentials");
 	}
 
+	@Transactional
 	public AuthResponse refreshToken(String refreshToken) {
 	    if (jwtUtil.validateToken(refreshToken)) {
-	        String email = jwtUtil.extractEmail(refreshToken);
 	        Long userId = jwtUtil.extractUserId(refreshToken);
 	        User user = userRepository.findById(userId)
 	                .orElseThrow(() -> new RuntimeException("User not found"));
 	        
-	        String newToken = jwtUtil.generateToken(email, userId, user.getRole().name());
-	        return new AuthResponse(newToken, refreshToken, user.getRole().name(), user.getId());
+	        // Industry Standard Rotation: Check if reused.
+	        // If the refresh token doesn't match what we have in the DB, it's potentially a reuse attack.
+	        if (!refreshToken.equals(user.getRefreshToken())) {
+	            user.setRefreshToken(null); // Force Logout everywhere for security
+	            userRepository.save(user);
+	            throw new RuntimeException("Security Alert: Reuse detection triggered. Please log in again.");
+	        }
+
+	        // Valid token. Perform rotation.
+	        String newAccessToken = jwtUtil.generateToken(user.getEmail(), userId, user.getRole().name());
+	        String newRefreshToken = jwtUtil.generateRefreshToken(user.getEmail(), userId);
+	        
+	        user.setRefreshToken(newRefreshToken);
+	        userRepository.save(user);
+	        
+	        return new AuthResponse(newAccessToken, newRefreshToken, user.getRole().name(), user.getId());
 	    }
-	    throw new RuntimeException("Invalid refresh token");
+	    throw new RuntimeException("Invalid refresh token session");
 	}
 
     public void sendRegistrationOtp(String email) {

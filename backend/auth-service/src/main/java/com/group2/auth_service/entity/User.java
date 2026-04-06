@@ -32,6 +32,17 @@ public class User extends BaseEntity {
 	@Column(nullable = false)
 	private Role role; // CUSTOMER or ADMIN
 
+	@Column(length = 1000)
+	private String refreshToken;
+
+	public String getRefreshToken() {
+		return refreshToken;
+	}
+
+	public void setRefreshToken(String refreshToken) {
+		this.refreshToken = refreshToken;
+	}
+
 	public Long getId() {
 		return id;
 	}
