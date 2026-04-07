@@ -322,6 +322,10 @@ export default function AdminSubscriptions() {
     try {
       await adminAPI.approveCancellation(policyId);
       toast.success('Policy cancelled successfully');
+      
+      // Optimistically update the UI to avoid waiting for a backend response delay
+      setSelectedUserPolicies(prev => prev.map(p => p.id === policyId ? { ...p, status: 'CANCELLED' } : p));
+      
       if (selectedUserId) fetchUserPolicies(selectedUserId);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Approval failed');

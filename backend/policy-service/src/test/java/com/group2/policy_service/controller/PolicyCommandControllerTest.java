@@ -68,13 +68,18 @@ public class PolicyCommandControllerTest {
     @Test
     void testRequestCancellation() {
         UserPolicyResponseDTO response = new UserPolicyResponseDTO();
-        when(policyCommandService.requestCancellation(1L)).thenReturn(response);
+        when(policyCommandService.requestCancellation(1L, "reason")).thenReturn(response);
 
-        ResponseEntity<UserPolicyResponseDTO> result = policyCommandController.requestCancellation(1L);
+        java.util.Map<String, String> body = new java.util.HashMap<>();
+        body.put("reason", "reason");
+
+        ResponseEntity<UserPolicyResponseDTO> result =
+                policyCommandController.requestCancellation(1L, body);
+
         assertEquals(200, result.getStatusCode().value());
         assertEquals(response, result.getBody());
     }
-
+    
     @Test
     void testApproveCancellation() {
         UserPolicyResponseDTO response = new UserPolicyResponseDTO();

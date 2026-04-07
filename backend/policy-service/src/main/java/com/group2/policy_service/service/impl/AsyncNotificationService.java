@@ -1,8 +1,6 @@
 package com.group2.policy_service.service.impl;
 
 import com.group2.policy_service.dto.NotificationEvent;
-import com.group2.policy_service.feign.AuthClient;
-import com.group2.policy_service.feign.UserDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -15,19 +13,16 @@ import java.time.LocalDate;
 public class AsyncNotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncNotificationService.class);
-    private final AuthClient authClient;
     private final RabbitTemplate rabbitTemplate;
 
-    public AsyncNotificationService(AuthClient authClient, RabbitTemplate rabbitTemplate) {
-        this.authClient = authClient;
+    public AsyncNotificationService(RabbitTemplate rabbitTemplate) {
         this.rabbitTemplate = rabbitTemplate;
     }
 
     @Async
-    public void sendPurchaseNotification(Long userId, String policyName, Double premium, Double coverage, LocalDate endDate) {
+    public void sendPurchaseNotification(String userEmail, String userName, String policyName, Double premium, Double coverage, LocalDate endDate) {
         try {
-            UserDTO user = authClient.getUserById(userId);
-            if (user == null || user.getEmail() == null) return;
+            if (userEmail == null) return;
 
             String subject = "SmartSure: Policy Purchase Successful";
             String htmlBody = String.format(
@@ -50,19 +45,18 @@ public class AsyncNotificationService {
                 "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
                 "&copy; 2026 SmartSure Insurance Management System" +
                 "</div></div></body></html>",
-                user.getName(), policyName, premium, coverage, endDate
+                userName, policyName, premium, coverage, endDate
             );
-            queueNotification(user.getEmail(), subject, htmlBody);
+            queueNotification(userEmail, subject, htmlBody);
         } catch (Exception e) {
             log.error("Failed to process purchase notification: {}", e.getMessage());
         }
     }
 
     @Async
-    public void sendPaymentNotification(Long userId, String policyName, Double amount, Double balance) {
+    public void sendPaymentNotification(String userEmail, String userName, String policyName, Double amount, Double balance) {
         try {
-            UserDTO user = authClient.getUserById(userId);
-            if (user == null || user.getEmail() == null) return;
+            if (userEmail == null) return;
 
             String subject = "SmartSure: Premium Payment Successful";
             String htmlBody = String.format(
@@ -83,19 +77,18 @@ public class AsyncNotificationService {
                 "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
                 "&copy; 2026 SmartSure Insurance Management System" +
                 "</div></div></body></html>",
-                user.getName(), policyName, amount, balance
+                userName, policyName, amount, balance
             );
-            queueNotification(user.getEmail(), subject, htmlBody);
+            queueNotification(userEmail, subject, htmlBody);
         } catch (Exception e) {
             log.error("Failed to process payment notification: {}", e.getMessage());
         }
     }
 
     @Async
-    public void sendCancellationRequestNotification(Long userId, String policyName) {
+    public void sendCancellationRequestNotification(String userEmail, String userName, String policyName) {
         try {
-            UserDTO user = authClient.getUserById(userId);
-            if (user == null || user.getEmail() == null) return;
+            if (userEmail == null) return;
 
             String subject = "SmartSure: Cancellation Request Received";
             String htmlBody = String.format(
@@ -113,19 +106,18 @@ public class AsyncNotificationService {
                 "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
                 "&copy; 2026 SmartSure Insurance Management System" +
                 "</div></div></body></html>",
-                user.getName(), policyName
+                userName, policyName
             );
-            queueNotification(user.getEmail(), subject, htmlBody);
+            queueNotification(userEmail, subject, htmlBody);
         } catch (Exception e) {
             log.error("Failed to process cancellation request notification: {}", e.getMessage());
         }
     }
 
     @Async
-    public void sendCancellationApprovalNotification(Long userId, String policyName) {
+    public void sendCancellationApprovalNotification(String userEmail, String userName, String policyName) {
         try {
-            UserDTO user = authClient.getUserById(userId);
-            if (user == null || user.getEmail() == null) return;
+            if (userEmail == null) return;
 
             String subject = "SmartSure: Policy Cancellation Approved";
             String htmlBody = String.format(
@@ -142,9 +134,9 @@ public class AsyncNotificationService {
                 "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
                 "&copy; 2026 SmartSure Insurance Management System" +
                 "</div></div></body></html>",
-                user.getName(), policyName
+                userName, policyName
             );
-            queueNotification(user.getEmail(), subject, htmlBody);
+            queueNotification(userEmail, subject, htmlBody);
         } catch (Exception e) {
             log.error("Failed to process cancellation approval notification: {}", e.getMessage());
         }

@@ -42,6 +42,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
     private final PolicyMapper mapper;
     private final AsyncNotificationService asyncNotificationService;
     private final RabbitTemplate rabbitTemplate;
+    private final AuthClient authClient;
     
     private static final Logger log = LoggerFactory.getLogger(PolicyCommandServiceImpl.class);
 
@@ -50,13 +51,15 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                                PolicyTypeRepository policyTypeRepository,
                                PolicyMapper mapper,
                                AsyncNotificationService asyncNotificationService,
-                               RabbitTemplate rabbitTemplate) {
+                               RabbitTemplate rabbitTemplate,
+                               AuthClient authClient) {
         this.policyRepository = policyRepository;
         this.userPolicyRepository = userPolicyRepository;
         this.policyTypeRepository = policyTypeRepository;
         this.mapper = mapper;
         this.asyncNotificationService = asyncNotificationService;
         this.rabbitTemplate = rabbitTemplate;
+        this.authClient = authClient;
     }
 
     @Transactional
@@ -88,8 +91,15 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
 
         userPolicyRepository.save(userPolicy);
 
-        // Send Purchase Notification (Asynchronous)
-        asyncNotificationService.sendPurchaseNotification(userId, policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate());
+        try {
+            UserDTO user = authClient.getUserById(userId);
+            if (user != null && user.getEmail() != null) {
+                // Send Purchase Notification (Asynchronous)
+                asyncNotificationService.sendPurchaseNotification(user.getEmail(), user.getName(), policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch user for notification: {}", e.getMessage());
+        }
 
         return mapper.mapToUserPolicyResponse(userPolicy);
     }
@@ -115,8 +125,15 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         userPolicy.setCancellationReason(reason);
         userPolicyRepository.save(userPolicy);
 
-        // Send Cancellation Request Notification (Asynchronous)
-        asyncNotificationService.sendCancellationRequestNotification(currentUserId, userPolicy.getPolicy().getPolicyName());
+        try {
+            UserDTO user = authClient.getUserById(currentUserId);
+            if (user != null && user.getEmail() != null) {
+                // Send Cancellation Request Notification (Asynchronous)
+                asyncNotificationService.sendCancellationRequestNotification(user.getEmail(), user.getName(), userPolicy.getPolicy().getPolicyName());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch user for cancellation notification: {}", e.getMessage());
+        }
 
         // Saga Trigger (RabbitMQ - Optional for STS users)
         try {
@@ -146,8 +163,15 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         userPolicy.setStatus(PolicyStatus.CANCELLED);
         userPolicyRepository.save(userPolicy);
 
-        // Send Cancellation Approval Notification (Asynchronous)
-        asyncNotificationService.sendCancellationApprovalNotification(userPolicy.getUserId(), userPolicy.getPolicy().getPolicyName());
+        try {
+            UserDTO user = authClient.getUserById(userPolicy.getUserId());
+            if (user != null && user.getEmail() != null) {
+                // Send Cancellation Approval Notification (Asynchronous)
+                asyncNotificationService.sendCancellationApprovalNotification(user.getEmail(), user.getName(), userPolicy.getPolicy().getPolicyName());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch user for cancellation approval notification: {}", e.getMessage());
+        }
 
         return mapper.mapToUserPolicyResponse(userPolicy);
     }
@@ -206,8 +230,15 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         userPolicy.setOutstandingBalance(Math.max(0, currentBalance - amount));
         userPolicyRepository.save(userPolicy);
 
-        // Send Payment Confirmation Email (Asynchronous)
-        asyncNotificationService.sendPaymentNotification(userPolicy.getUserId(), userPolicy.getPolicy().getPolicyName(), amount, userPolicy.getOutstandingBalance());
+        try {
+            UserDTO user = authClient.getUserById(userPolicy.getUserId());
+            if (user != null && user.getEmail() != null) {
+                // Send Payment Confirmation Email (Asynchronous)
+                asyncNotificationService.sendPaymentNotification(user.getEmail(), user.getName(), userPolicy.getPolicy().getPolicyName(), amount, userPolicy.getOutstandingBalance());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch user for payment notification: {}", e.getMessage());
+        }
 
         return mapper.mapToUserPolicyResponse(userPolicy);
     }

@@ -39,6 +39,9 @@ public class NotificationServiceImpl implements INotificationService {
     @Value("${brevo.sender.email}")
     private String senderEmail;
 
+    @Value("${spring.mail.username}")
+    private String smtpUsername;
+
     public NotificationServiceImpl(OtpRepository otpRepository, JavaMailSender javaMailSender) {
         this.otpRepository = otpRepository;
         this.javaMailSender = javaMailSender;
@@ -124,8 +127,8 @@ public class NotificationServiceImpl implements INotificationService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(body, true); // true indicates HTML
-            helper.setFrom(senderEmail);
-            
+            helper.setFrom(smtpUsername); // CRITICAL FIX: Use SMTP auth email, not Brevo email
+
             javaMailSender.send(message);
             log.info("SMTP HTML email sent successfully to: {}", to);
         } catch (Exception e) {

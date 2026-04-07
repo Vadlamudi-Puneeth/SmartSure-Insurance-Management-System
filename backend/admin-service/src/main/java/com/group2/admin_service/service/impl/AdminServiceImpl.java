@@ -96,13 +96,13 @@ public class AdminServiceImpl implements IAdminService {
             String statusIcon = request.getStatus().equalsIgnoreCase("APPROVED") ? "✅" : "❌";
 
             htmlBody = String.format(
-                "<html><body style='font-family: Arial, sans-serif; color: #333;'>" +
+                "<html><body style='font-family: Arial, sans-serif; color: #333; line-height: 1.6;'>" +
                 "<div style='max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;'>" +
                 "<div style='background: %s; color: white; padding: 20px; text-align: center;'>" +
                 "<h1 style='margin: 0;'>%s Claim %s</h1>" +
                 "</div>" +
                 "<div style='padding: 20px;'>" +
-                "<p>Hello %s,</p>" +
+                "<h2>Hello %s,</h2>" +
                 "<p>Your claim for policy: <strong>%s</strong> has been reviewed.</p>" +
                 "<div style='background: #f4f7f6; padding: 15px; border-radius: 5px; border-left: 5px solid %s;'>" +
                 "<strong>Status:</strong> %s<br/>" +

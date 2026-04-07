@@ -56,6 +56,7 @@ public class RabbitMQConfig {
         idClassMapping.put("com.group2.claims_service.dto.NotificationEvent", NotificationEvent.class);
         idClassMapping.put("com.group2.policy_service.dto.NotificationEvent", NotificationEvent.class);
         idClassMapping.put("com.group2.notification_service.dto.NotificationEvent", NotificationEvent.class);
+        idClassMapping.put("com.group2.admin_service.dto.NotificationEvent", NotificationEvent.class);
         typeMapper.setIdClassMapping(idClassMapping);
         // Allow trusted packages so deserialization doesn't fail on unknown headers
         typeMapper.setTrustedPackages("com.group2.*");

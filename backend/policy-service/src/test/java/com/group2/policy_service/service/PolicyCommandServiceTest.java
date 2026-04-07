@@ -163,7 +163,7 @@ public class PolicyCommandServiceTest {
         when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any(UserPolicy.class))).thenReturn(new UserPolicyResponseDTO());
 
-        UserPolicyResponseDTO response = policyCommandService.requestCancellation(5L);
+        UserPolicyResponseDTO response = policyCommandService.requestCancellation(5L, "Reason");
 
         assertNotNull(response);
         assertEquals(PolicyStatus.PENDING_CANCELLATION, mockUserPolicy.getStatus());

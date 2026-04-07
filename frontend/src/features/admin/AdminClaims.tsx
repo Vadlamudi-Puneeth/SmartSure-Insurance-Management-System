@@ -403,11 +403,13 @@ export default function AdminClaims() {
       toast.success('Claim status updated!');
       setShowReview(null); setReviewStatus(''); setReviewRemark('');
 
-      // Refresh local claim state
-      setTimeout(() => {
-        if (selectedUser) fetchClaims(selectedUser.id, currentClaimsPage);
-        else fetchGlobalClaims(globalClaimsPage);
-      }, 1500);
+      // Optimistically update local state immediately to remove blinking
+      setClaims(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
+      setGlobalClaims(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
+
+      // Fetch fresh data from backend
+      if (selectedUser) fetchClaims(selectedUser.id, currentClaimsPage);
+      else fetchGlobalClaims(globalClaimsPage);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to review claim');
     } finally { setSubmitting(false); }
