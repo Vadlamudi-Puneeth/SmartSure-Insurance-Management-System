@@ -1,9 +1,10 @@
 package com.group2.auth_service.service.impl;
 
 import com.group2.auth_service.service.IAuthService;
-
+import com.group2.auth_service.dto.PageResponseDTO;
 import java.util.Optional;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -171,10 +172,31 @@ public class AuthServiceImpl implements IAuthService {
         notificationClient.markOtpAsUsed(sanitizedEmail);
     }
 
+    @Override
+    public UserResponseDTO getProfile() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Long userId;
+        try {
+            userId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Authentication failed: invalid user principal");
+        }
+
+        return userRepository.findById(userId)
+                .map(authMapper::mapToResponse)
+                .orElseThrow(() -> new RuntimeException("Logged-in user not found in records"));
+    }
+
+    @Override
     @Transactional
     public UserResponseDTO updateProfile(UserProfileRequest request) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        Long userId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
+        Long userId;
+        try {
+            userId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Authentication failed: invalid user principal");
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -195,5 +217,22 @@ public class AuthServiceImpl implements IAuthService {
                 .map(authMapper::mapToResponse)
                 .collect(java.util.stream.Collectors.toList());
 	}
+
+    @Override
+    public PageResponseDTO<UserResponseDTO> getAllUsersPaginated(int page, int size, String query) {
+        Page<com.group2.auth_service.entity.User> userPage = userRepository.findAllCustomersPaginated(query, PageRequest.of(page, size));
+        java.util.List<UserResponseDTO> content = userPage.getContent().stream()
+                .map(authMapper::mapToResponse)
+                .collect(java.util.stream.Collectors.toList());
+
+        return new PageResponseDTO<>(
+            content,
+            userPage.getNumber(),
+            userPage.getSize(),
+            userPage.getTotalElements(),
+            userPage.getTotalPages(),
+            userPage.isLast()
+        );
+    }
 
 }

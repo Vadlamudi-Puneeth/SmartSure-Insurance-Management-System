@@ -17,6 +17,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private final JwtFilter jwtFilter;
+
+    public SecurityConfig(JwtFilter jwtFilter) {
+        this.jwtFilter = jwtFilter;
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -26,9 +32,22 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/actuator/**", "/error").permitAll()
+                        .requestMatchers(
+                            "/api/auth/login", 
+                            "/api/auth/register", 
+                            "/api/auth/send-otp", 
+                            "/api/auth/verify-otp", 
+                            "/api/auth/forgot-password/**", 
+                            "/api/auth/reset-password", 
+                            "/api/auth/refresh-token",
+                            "/v3/api-docs/**", 
+                            "/swagger-ui/**", 
+                            "/actuator/**", 
+                            "/error"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(jwtFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
     

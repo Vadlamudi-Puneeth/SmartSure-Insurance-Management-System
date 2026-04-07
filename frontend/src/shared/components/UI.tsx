@@ -97,6 +97,7 @@ export function Badge({ status }: { status?: string }) {
     PENDING: { bg: '#f59e0b20', text: '#f59e0b' },
     SUCCESS: { bg: '#10b98120', text: '#10b981' },
     FAILED: { bg: '#ef444420', text: '#ef4444' },
+    PENDING_CANCELLATION: { bg: '#f59e0b20', text: '#f59e0b' },
   };
   const c = colors[status as string] || { bg: '#64748b20', text: '#64748b' };
   return (

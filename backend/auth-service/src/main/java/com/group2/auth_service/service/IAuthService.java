@@ -8,6 +8,7 @@ import com.group2.auth_service.dto.ResetPasswordRequest;
 import com.group2.auth_service.dto.UserProfileRequest;
 import com.group2.auth_service.entity.User;
 
+import com.group2.auth_service.dto.PageResponseDTO;
 import com.group2.auth_service.dto.UserResponseDTO;
 
 public interface IAuthService {
@@ -17,8 +18,10 @@ public interface IAuthService {
     void verifyOtp(String email, String otp);
     void sendForgotPasswordOtp(String email);
     void resetPassword(ResetPasswordRequest request);
+    UserResponseDTO getProfile();
     UserResponseDTO updateProfile(UserProfileRequest request);
     UserResponseDTO getUserById(Long id);
     List<UserResponseDTO> getAllUsers();
+    PageResponseDTO<UserResponseDTO> getAllUsersPaginated(int page, int size, String query);
     AuthResponse refreshToken(String refreshToken);
 }

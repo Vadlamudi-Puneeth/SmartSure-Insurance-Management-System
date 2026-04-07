@@ -16,6 +16,12 @@ import com.group2.policy_service.repository.PolicyTypeRepository;
 import com.group2.policy_service.repository.UserPolicyRepository;
 import com.group2.policy_service.util.PolicyMapper;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import com.group2.policy_service.dto.PageResponseDTO;
+import com.group2.policy_service.entity.Policy;
+
 @Service
 public class PolicyQueryServiceImpl implements IPolicyQueryService {
 
@@ -32,6 +38,26 @@ public class PolicyQueryServiceImpl implements IPolicyQueryService {
         this.userPolicyRepository = userPolicyRepository;
         this.policyTypeRepository = policyTypeRepository;
         this.mapper = mapper;
+    }
+
+    @Override
+    public PageResponseDTO<PolicyResponseDTO> searchPolicies(String category, String query, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Policy> policyPage = policyRepository.searchPolicies(category, query, pageable);
+
+        List<PolicyResponseDTO> content = policyPage.getContent()
+                .stream()
+                .map(mapper::mapToPolicyResponse)
+                .collect(Collectors.toList());
+
+        return new PageResponseDTO<>(
+                content,
+                policyPage.getNumber(),
+                policyPage.getSize(),
+                policyPage.getTotalElements(),
+                policyPage.getTotalPages(),
+                policyPage.isLast()
+        );
     }
 
     @Cacheable(value = "user_policies", key = "#userId")

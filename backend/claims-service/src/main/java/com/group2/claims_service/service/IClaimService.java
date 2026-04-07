@@ -7,6 +7,8 @@ import com.group2.claims_service.dto.ClaimResponseDTO;
 import com.group2.claims_service.dto.ClaimStatsDTO;
 import com.group2.claims_service.entity.ClaimDocument;
 
+import com.group2.claims_service.dto.PageResponseDTO;
+
 public interface IClaimService {
     ClaimResponseDTO initiateClaim(ClaimRequestDTO requestDTO);
     String uploadDocument(Long claimId, MultipartFile file);
@@ -16,6 +18,8 @@ public interface IClaimService {
     void updateClaimStatus(Long claimId, String newStatus, String remark);
     List<ClaimResponseDTO> getClaimsByUserId(Long userId);
     List<ClaimResponseDTO> getAllClaims();
+    PageResponseDTO<ClaimResponseDTO> getAllClaimsPaginated(int page, int size, String query);
+    PageResponseDTO<ClaimResponseDTO> getClaimsByUserIdPaginated(Long userId, int page, int size, String query);
     ClaimStatsDTO getClaimStats();
     void cancelClaimsByPolicy(Long policyId);
 }

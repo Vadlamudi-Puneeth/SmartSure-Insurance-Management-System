@@ -1,13 +1,40 @@
-import { useState, useEffect } from 'react';
-import { adminAPI } from '../../core/services/api';
+import { useState, useEffect, useMemo } from 'react';
+import { adminAPI, authAPI, claimsAPI } from '../../core/services/api';
 import {
-  HiClipboardList, HiSearch, HiCheckCircle, HiXCircle, HiEye,
+  HiClipboardList, HiSearch, HiCheckCircle, HiEye,
   HiDownload, HiUser, HiChevronRight, HiRefresh, HiClock,
   HiArrowRight, HiMail, HiPhone
 } from 'react-icons/hi';
-import { PageHeader, Card, Badge, Button, Modal, Input, Textarea } from '../../shared/components/UI';
-import LoadingSpinner, { ErrorMessage, EmptyState } from '../../shared/components/UI';
+import { Badge, Button, Modal, Textarea } from '../../shared/components/UI';
 import toast from 'react-hot-toast';
+import { useDebounce } from '../../shared/hooks/useDebounce';
+
+/* ─────────────────────────────────────────────────────────────
+   Types
+───────────────────────────────────────────────────────────── */
+interface User {
+  id: string | number;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+}
+
+interface Claim {
+  claimId: string | number;
+  userId: string | number;
+  claimAmount: number;
+  status: string;
+  description?: string;
+  message?: string;
+}
+
+interface StatusOption {
+  id: string;
+  label: string;
+  color: string;
+}
+
 
 /* ─────────────────────────────────────────────────────────────
    Styles — matches the AdminSubscriptions visual language
@@ -43,6 +70,37 @@ const STYLES = `
     transform: translateX(3px);
   }
   .c-user-card.active::before { opacity: 1; }
+  
+  /* Pulse dot for SUBMITTED */
+  .pulse-dot-submitted {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ef4444; /* Red for attention */
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+    animation: pulse-ring 1.4s ease-out infinite;
+  }
+  
+  /* Blinking text for SUBMITTED status */
+  .blink-text {
+    animation: blinker 1.5s linear infinite;
+    font-weight: 800;
+  }
+  @keyframes blinker {
+    50% { opacity: 0.2; }
+  }
+
+  /* Static dot for UNDER_REVIEW */
+  .dot-reviewing {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #f59e0b; /* Amber */
+  }
+
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+    70%  { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
 
   /* Search */
   .c-search {
@@ -235,70 +293,106 @@ const STYLES = `
    Component
 ───────────────────────────────────────────────────────────── */
 export default function AdminClaims() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [errorUsers, setErrorUsers] = useState(null);
+  const [errorUsers, setErrorUsers] = useState<string | null>(null);
 
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [claims, setClaims] = useState([]);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [claims, setClaims] = useState<Claim[]>([]);
+  const [globalClaims, setGlobalClaims] = useState<Claim[]>([]);
   const [loadingClaims, setLoadingClaims] = useState(false);
-  const [errorClaims, setErrorClaims] = useState(null);
+  const [isSubsequentLoadingClaims, setIsSubsequentLoadingClaims] = useState(false);
+  const [errorClaims, setErrorClaims] = useState<string | null>(null);
 
   const [searchUser, setSearchUser] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, SUBMITTED, UNDER_REVIEW, PENDING (SUBMITTED)
-  const [allClaims, setAllClaims] = useState([]);
+  const debouncedSearchUser = useDebounce(searchUser, 500);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  const [fullClaimsLedger, setFullClaimsLedger] = useState<any[]>([]);
 
   const PAGE_SIZE_USERS = 8;
   const [currentUsersPage, setCurrentUsersPage] = useState(1);
+  const [totalUsersPages, setTotalUsersPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
 
-  const [showReview, setShowReview] = useState(null);
+  const PAGE_SIZE_CLAIMS = 6;
+  const [currentClaimsPage, setCurrentClaimsPage] = useState(1);
+  const [totalClaimsPages, setTotalClaimsPages] = useState(1);
+
+  const [globalClaimsPage, setGlobalClaimsPage] = useState(1);
+  const [totalGlobalClaimsPages, setTotalGlobalClaimsPages] = useState(1);
+  const [totalGlobalClaims, setTotalGlobalClaims] = useState(0);
+
+  const [showReview, setShowReview] = useState<string | number | null>(null);
   const [reviewStatus, setReviewStatus] = useState('');
   const [reviewRemark, setReviewRemark] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const [showDetail, setShowDetail] = useState(null);
-  const [claimDetail, setClaimDetail] = useState(null);
+  const [showDetail, setShowDetail] = useState<string | number | null>(null);
+  const [claimDetail, setClaimDetail] = useState<Claim | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  useEffect(() => { 
-    fetchUsers(); 
-    fetchAllClaims();
-  }, []);
 
-  const fetchAllClaims = async () => {
-    try {
-      const res = await adminAPI.getAllClaims();
-      setAllClaims(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error('Failed to pre-fetch claims for filtering', err);
+  useEffect(() => {
+    fetchUsers();
+  }, [debouncedSearchUser, currentUsersPage]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      fetchGlobalClaims(globalClaimsPage);
     }
-  };
+  }, [globalClaimsPage, selectedUser]);
 
   const fetchUsers = async () => {
     setLoadingUsers(true); setErrorUsers(null);
     try {
-      const res = await adminAPI.getUsers();
-      setUsers(Array.isArray(res.data) ? res.data.filter(u => u.role === 'CUSTOMER') : []);
-    } catch (err) {
+      const [userRes, claimsRes] = await Promise.all([
+        authAPI.getUsersPaginated(currentUsersPage - 1, PAGE_SIZE_USERS, debouncedSearchUser),
+        adminAPI.getAllClaims()
+      ]);
+      setUsers(userRes.data.content);
+      setTotalUsersPages(userRes.data.totalPages || 1);
+      setTotalUsers(userRes.data.totalElements || 0);
+      setFullClaimsLedger(claimsRes.data || []);
+    } catch (err: any) {
       setErrorUsers(err.response?.data?.message || 'Failed to load users');
     } finally { setLoadingUsers(false); }
   };
 
-  const fetchClaims = async (userId) => {
-    setLoadingClaims(true); setErrorClaims(null);
+  const fetchGlobalClaims = async (page = 1) => {
     try {
-      const res = await adminAPI.getClaimsByUser(userId);
-      setClaims(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      setErrorClaims(err.response?.data?.message || 'Failed to load claims');
-      setClaims([]);
-    } finally { setLoadingClaims(false); }
+      const res = await adminAPI.getAllClaimsPaginated(page - 1, PAGE_SIZE_CLAIMS, '');
+      setGlobalClaims(res.data.content || []);
+      setTotalGlobalClaimsPages(res.data.totalPages || 1);
+      setTotalGlobalClaims(res.data.totalElements || 0);
+    } catch (err: any) {
+      console.error('Failed to get paginated global claims', err);
+    }
   };
 
-  const handleUserSelect = (user) => { setSelectedUser(user); fetchClaims(user.id); };
+  const fetchClaims = async (userId: string | number, page = 1) => {
+    if (page === 1) setLoadingClaims(true);
+    else setIsSubsequentLoadingClaims(true);
+    setErrorClaims(null);
+    try {
+      const res = await claimsAPI.getClaimsByUserPaginated(userId, page - 1, PAGE_SIZE_CLAIMS, '');
+      setClaims(res.data.content);
+      setTotalClaimsPages(res.data.totalPages || 1);
+      setCurrentClaimsPage(page);
+    } catch (err: any) {
+      setErrorClaims(err.response?.data?.message || 'Failed to load claims');
+      setClaims([]);
+    } finally { 
+      setLoadingClaims(false); 
+      setIsSubsequentLoadingClaims(false);
+    }
+  };
+
+  const handleUserSelect = (user: User) => { setSelectedUser(user); fetchClaims(user.id, 1); };
+
 
   const handleReview = async () => {
-    if (!reviewStatus) { toast.error('Please select a status'); return; }
+    if (!showReview || !reviewStatus) { toast.error('Please select a status'); return; }
     if ((reviewStatus === 'APPROVED' || reviewStatus === 'REJECTED') && !reviewRemark.trim()) {
       toast.error('Please provide a remark for approval/rejection');
       return;
@@ -308,29 +402,31 @@ export default function AdminClaims() {
       await adminAPI.reviewClaim(showReview, { status: reviewStatus, remark: reviewRemark });
       toast.success('Claim status updated!');
       setShowReview(null); setReviewStatus(''); setReviewRemark('');
-      // Refresh both local and global claim state
-      setTimeout(() => { 
-        if (selectedUser) fetchClaims(selectedUser.id);
-        fetchAllClaims();
+
+      // Refresh local claim state
+      setTimeout(() => {
+        if (selectedUser) fetchClaims(selectedUser.id, currentClaimsPage);
+        else fetchGlobalClaims(globalClaimsPage);
       }, 1500);
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to review claim');
     } finally { setSubmitting(false); }
   };
 
-  const handleViewDetail = async (claimId) => {
+  const handleViewDetail = async (claimId: string | number) => {
     setShowDetail(claimId); setLoadingDetail(true);
-    const local = claims.find(c => c.claimId === claimId) || {};
+    const local = claims.find(c => c.claimId === claimId);
     try {
       const res = await adminAPI.getClaimStatus(claimId);
-      setClaimDetail({ ...local, ...res.data });
+      setClaimDetail({ ...(local as Claim), ...res.data });
     } catch {
       toast.error('Using existing claim details. Failed to fetch full logs.');
-      setClaimDetail(local);
+      setClaimDetail(local || null);
     } finally { setLoadingDetail(false); }
   };
 
-  const handleDownloadDoc = async (claimId) => {
+
+  const handleDownloadDoc = async (claimId: string | number) => {
     try {
       const res = await adminAPI.downloadClaimDocument(claimId);
       const ct = res.headers['content-type'] || 'application/octet-stream';
@@ -341,45 +437,46 @@ export default function AdminClaims() {
         const a = document.createElement('a');
         a.href = url; a.download = `claim-${claimId}-document`; a.click();
       }
-    } catch { toast.error('No document found for this claim'); }
+    } catch (err: any) { toast.error('No document found for this claim'); }
   };
 
-  const getValidStatusOptions = (s) => {
+  const getValidStatusOptions = (s?: string): StatusOption[] => {
     switch (s) {
-      case 'SUBMITTED':    return [{ id: 'UNDER_REVIEW', label: 'Start Review', color: '#6366f1' }];
+      case 'SUBMITTED': return [{ id: 'UNDER_REVIEW', label: 'Start Review', color: '#6366f1' }];
       case 'UNDER_REVIEW': return [{ id: 'APPROVED', label: 'Approve Claim', color: '#10b981' }, { id: 'REJECTED', label: 'Reject Claim', color: '#ef4444' }];
       case 'APPROVED':
-      case 'REJECTED':     return [{ id: 'CLOSED', label: 'Mark as Closed', color: '#64748b' }];
-      case 'CLOSED':       return [{ id: 'UNDER_REVIEW', label: 'Reopen Claim', color: '#f59e0b' }];
-      default:             return [];
+      case 'REJECTED': return [{ id: 'CLOSED', label: 'Mark as Closed', color: '#64748b' }];
+      case 'CLOSED': return [{ id: 'UNDER_REVIEW', label: 'Reopen Claim', color: '#f59e0b' }];
+      default: return [];
     }
   };
 
-  const safeSearch = searchUser.trim().toLowerCase();
-  
-  // Filter users by search AND status of their claims
-  const filteredUsers = users.filter(u => {
-    const matchesSearch = (u.name || '').toLowerCase().includes(safeSearch) ||
-                         (u.email || '').toLowerCase().includes(safeSearch) ||
-                         (u.phone || '').includes(safeSearch) ||
-                         (u.id || '').toString().includes(safeSearch);
-    
-    if (!matchesSearch) return false;
-    if (statusFilter === 'ALL') return true;
-    
-    // Check if this user has any claim matching the status filter
-    return allClaims.some(c => c.userId === u.id && c.status === statusFilter);
-  });
-  const totalUsersPages = Math.ceil(filteredUsers.length / PAGE_SIZE_USERS);
-  const currentUsers = filteredUsers.slice((currentUsersPage - 1) * PAGE_SIZE_USERS, currentUsersPage * PAGE_SIZE_USERS);
+  // Derived stats per user for pulse dot and labels
+  const userClaimsStats = useMemo(() => {
+    return users.reduce((acc: Record<string | number, { hasSubmitted: boolean; hasReviewing: boolean }>, user) => {
+      const uIdStr = String(user.id);
+      const uClaims = fullClaimsLedger.filter(c => String(c.userId) === uIdStr);
+      acc[uIdStr] = {
+        hasSubmitted: uClaims.some(c => c.status === 'SUBMITTED'),
+        hasReviewing: uClaims.some(c => c.status === 'UNDER_REVIEW')
+      };
+      return acc;
+    }, {});
+  }, [users, fullClaimsLedger]);
 
-  const currentReviewingClaim = claims.find(c => c.claimId === showReview);
+  // Filter users based on statusFilter (hasSubmitted or hasReviewing)
+  const currentUsers = useMemo(() => {
+    if (statusFilter === 'ALL') return users;
+    return users.filter(u => {
+      const stats = userClaimsStats[String(u.id)];
+      if (statusFilter === 'SUBMITTED') return stats?.hasSubmitted;
+      if (statusFilter === 'UNDER_REVIEW') return stats?.hasReviewing;
+      return true;
+    });
+  }, [users, userClaimsStats, statusFilter]);
+
+  const currentReviewingClaim = claims.find(c => c.claimId === showReview) || globalClaims.find(c => c.claimId === showReview);
   const statusOptions = getValidStatusOptions(currentReviewingClaim?.status);
-
-  // Derived stats
-  const submittedCount = claims.filter(c => c.status === 'SUBMITTED').length;
-  const underReviewCount = claims.filter(c => c.status === 'UNDER_REVIEW').length;
-  const approvedCount = claims.filter(c => c.status === 'APPROVED').length;
 
   return (
     <>
@@ -397,16 +494,14 @@ export default function AdminClaims() {
           </p>
         </div>
 
-        {/* ── Top Stats (shown when a user is selected) ── */}
+        {/* ── Top Stats Row ── */}
         <div className="c-stat-grid">
           {[
-            { label: 'Total Customers', value: users.length },
-            { label: 'Submitted', value: selectedUser ? submittedCount : '—', color: '#6366f1' },
-            { label: 'Under Review', value: selectedUser ? underReviewCount : '—', color: '#f59e0b' },
-            { label: 'Approved', value: selectedUser ? approvedCount : '—', color: '#10b981' },
+            { label: 'Total Claims Recorded', value: totalGlobalClaims, mono: true },
+            { label: 'Registered Customers', value: totalUsers, mono: true },
           ].map(s => (
             <div key={s.label} className="c-stat">
-              <span className="mono" style={{ fontSize: 26, fontWeight: 600, color: s.color || 'var(--color-text)' }}>
+              <span className="mono" style={{ fontSize: 26, fontWeight: 600, color: 'var(--color-text)' }}>
                 {s.value}
               </span>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', opacity: .65 }}>
@@ -431,11 +526,11 @@ export default function AdminClaims() {
                 <p className="c-label">Customers</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    onClick={() => { fetchUsers(); fetchAllClaims(); }}
+                    onClick={() => { fetchUsers(); }}
                     title="Refresh"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', opacity: .5, padding: 4, borderRadius: 8, display: 'flex', alignItems: 'center', transition: 'opacity .15s' }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                    onMouseLeave={e => e.currentTarget.style.opacity = .5}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
                   >
                     <HiRefresh style={{ width: 14, height: 14 }} />
                   </button>
@@ -466,7 +561,7 @@ export default function AdminClaims() {
                 <HiSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)', opacity: .45, width: 14, height: 14 }} />
                 <input
                   className="c-search"
-                  placeholder="Search by name, email…"
+                  placeholder="Search by customer name..."
                   value={searchUser}
                   onChange={e => { setSearchUser(e.target.value); setCurrentUsersPage(1); }}
                 />
@@ -476,7 +571,7 @@ export default function AdminClaims() {
             {/* List */}
             <div className="slim-scroll" style={{ overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
               {loadingUsers ? (
-                [1,2,3,4,5].map(i => (
+                [1, 2, 3, 4, 5, 8].map(i => (
                   <div key={i} style={{ padding: '14px 14px', borderRadius: 14, border: '1.5px solid var(--color-border)', display: 'flex', gap: 10, alignItems: 'center' }}>
                     <div className="skel" style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0 }} />
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -489,22 +584,42 @@ export default function AdminClaims() {
                 <p style={{ textAlign: 'center', padding: '24px 0', fontSize: 12, color: '#ef4444' }}>{errorUsers}</p>
               ) : currentUsers.length === 0 ? (
                 <p style={{ textAlign: 'center', padding: '32px 0', fontSize: 12, color: 'var(--color-text-secondary)', opacity: .45, fontStyle: 'italic' }}>No customers found</p>
-              ) : currentUsers.map((u, i) => (
+              ) : currentUsers.map(u => (
                 <div
                   key={u.id}
-                  className={`c-user-card${selectedUser?.id === u.id ? ' active' : ''}`}
                   onClick={() => handleUserSelect(u)}
+                  style={{
+                    padding: '12px', borderRadius: 12, cursor: 'pointer',
+                    background: selectedUser?.id === u.id ? 'var(--color-primary)08' : 'transparent',
+                    border: `1.5px solid ${selectedUser?.id === u.id ? 'var(--color-primary)' : 'transparent'}`,
+                    display: 'flex', alignItems: 'flex-start', gap: 10, transition: 'all .15s'
+                  }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                        <p className="mono" style={{ fontSize: 10, margin: 0, color: 'var(--color-text-secondary)', opacity: .55 }}>#{u.id}</p>
-                        {u.phone && <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: .4 }}>• {u.phone}</span>}
+                  <div className="c-avatar" style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-border)' }}>
+                    <HiUser style={{ width: 18, height: 18 }} />
+                  </div>
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</p>
+                    <p style={{ margin: 0, fontSize: 10, color: 'var(--color-text-secondary)' }}>{u.email}</p>
+                    
+                    {(userClaimsStats[String(u.id)]?.hasSubmitted || userClaimsStats[String(u.id)]?.hasReviewing) && (
+                      <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {userClaimsStats[String(u.id)]?.hasSubmitted ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fee2e2', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                            <div className="pulse-dot-submitted" style={{ position: 'relative', top: 0, right: 0 }} /> Submitted
+                          </span>
+                        ) : userClaimsStats[String(u.id)]?.hasReviewing ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                            <div className="dot-reviewing" style={{ position: 'relative', top: 0, right: 0 }} /> Reviewing
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
+                    )}
+
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8, marginTop: 10 }}>
                     <HiChevronRight style={{
-                      width: 14, height: 14, flexShrink: 0, marginLeft: 8,
+                      width: 14, height: 14,
                       color: 'var(--color-primary)',
                       opacity: selectedUser?.id === u.id ? 1 : 0,
                       transform: selectedUser?.id === u.id ? 'translateX(0)' : 'translateX(-4px)',
@@ -516,30 +631,97 @@ export default function AdminClaims() {
             </div>
 
             {/* Pagination */}
-            {totalUsersPages > 1 && (
-              <div style={{ padding: '12px 14px', borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <button className="c-page-btn" onClick={() => setCurrentUsersPage(p => Math.max(1, p - 1))} disabled={currentUsersPage === 1}>← Prev</button>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', opacity: .6 }}>{currentUsersPage} / {totalUsersPages}</span>
-                <button className="c-page-btn" onClick={() => setCurrentUsersPage(p => Math.min(totalUsersPages, p + 1))} disabled={currentUsersPage === totalUsersPages}>Next →</button>
-              </div>
-            )}
+            <div style={{ padding: '12px 14px', borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button className="c-page-btn" onClick={() => setCurrentUsersPage(p => Math.max(1, p - 1))} disabled={currentUsersPage === 1}>← Prev</button>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', opacity: .6 }}>{currentUsersPage} / {Math.max(1, totalUsersPages)}</span>
+              <button className="c-page-btn" onClick={() => setCurrentUsersPage(p => Math.min(totalUsersPages, p + 1))} disabled={currentUsersPage === totalUsersPages || totalUsersPages === 0}>Next →</button>
+            </div>
           </div>
 
           {/* ── RIGHT: Claims Panel ── */}
           <div>
             {!selectedUser ? (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                minHeight: 480, borderRadius: 20, border: '1.5px dashed var(--color-border)',
-                background: 'var(--color-surface)', gap: 12,
-              }}>
-                <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: .35 }}>
-                  <HiClipboardList style={{ width: 28, height: 28, color: 'var(--color-text)' }} />
+              <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* ── All Claims Header ── */}
+                <div style={{
+                  padding: '22px 26px',
+                  borderRadius: 20,
+                  border: '1.5px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div className="c-avatar" style={{ background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)' }}>
+                      <HiClipboardList style={{ width: 26, height: 26, color: '#fff' }} />
+                    </div>
+                    <div>
+                      <h2 className="serif" style={{ fontSize: 24, color: 'var(--color-text)', margin: '0 0 5px' }}>Global Claims Audit</h2>
+                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>Viewing all active claims across the system</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { fetchGlobalClaims(globalClaimsPage); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7,
+                      padding: '9px 16px', borderRadius: 12,
+                      border: '1.5px solid var(--color-border)',
+                      background: 'var(--color-surface)',
+                      color: 'var(--color-text-secondary)',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      fontFamily: 'var(--font-family)',
+                    }}
+                  >
+                    <HiRefresh style={{ width: 14, height: 14 }} />
+                    Sync Worldwide
+                  </button>
                 </div>
-                <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-text)', margin: 0 }}>Select a customer</p>
-                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, opacity: .55, textAlign: 'center', maxWidth: 280 }}>
-                  Pick a customer from the left panel to view and manage their claims.
-                </p>
+
+                <div style={{ borderRadius: 20, border: '1.5px solid var(--color-border)', background: 'var(--color-surface)', overflow: 'hidden' }}>
+                    <div style={{ padding: '16px 22px 14px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <HiClipboardList style={{ width: 15, height: 15, color: 'var(--color-primary)' }} />
+                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text)' }}>Master Claims Ledger</span>
+                      <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-secondary)', opacity: .5 }}>{totalGlobalClaims} Total Records</span>
+                    </div>
+                    <div style={{ overflowX: 'auto', minHeight: 280 }}>
+                      <table className="c-table">
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: 'left' }}>Claim ID</th>
+                            <th style={{ textAlign: 'left' }}>User ID</th>
+                            <th style={{ textAlign: 'left' }}>Amount</th>
+                            <th style={{ textAlign: 'left' }}>Status</th>
+                            <th style={{ textAlign: 'right', paddingRight: 22 }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {globalClaims.length === 0 ? (
+                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '48px 0', opacity: .4 }}>No claims found.</td></tr>
+                          ) : globalClaims.map(claim => (
+                            <tr key={claim.claimId} className={claim.status === 'SUBMITTED' ? 'fade-up' : ''} style={claim.status === 'SUBMITTED' ? { backgroundColor: 'var(--color-primary)05' } : {}}>
+                              <td><span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>#{claim.claimId}</span></td>
+                              <td><span className="mono" style={{ fontSize: 11, opacity: .7 }}>USR-{claim.userId}</span></td>
+                              <td><span className="mono" style={{ fontWeight: 700 }}>₹{claim.claimAmount?.toLocaleString()}</span></td>
+                              <td>
+                                <div className={claim.status === 'SUBMITTED' ? 'blink-text' : ''}>
+                                  <Badge status={claim.status} />
+                                </div>
+                              </td>
+                              <td style={{ textAlign: 'right', paddingRight: 18 }}>
+                                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                  <button onClick={() => handleViewDetail(claim.claimId)} className="c-action-btn" style={{ color: 'var(--color-accent)', background: 'var(--color-accent)12' }}>
+                                    <HiEye style={{ width: 16, height: 16 }} />
+                                  </button>
+                                  <button onClick={() => setShowReview(claim.claimId)} className="c-action-btn" style={{ color: 'var(--color-primary)', background: 'var(--color-primary)12' }}>
+                                    <HiCheckCircle style={{ width: 16, height: 16 }} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                </div>
               </div>
             ) : (
               <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -554,35 +736,47 @@ export default function AdminClaims() {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div className="c-avatar">
-                      <HiUser style={{ width: 28, height: 28, color: '#fff' }} />
+                      <HiUser />
                     </div>
                     <div>
                       <h2 className="serif" style={{ fontSize: 24, color: 'var(--color-text)', margin: '0 0 5px' }}>{selectedUser.name}</h2>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><HiMail style={{ width: 12, height: 12 }} />{selectedUser.email}</span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><HiPhone style={{ width: 12, height: 12 }} />{selectedUser.phone || 'No phone'}</span>
-                      </div>
+                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>{selectedUser.email} • {selectedUser.phone}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => fetchClaims(selectedUser.id)}
-                    disabled={loadingClaims}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      padding: '9px 16px', borderRadius: 12,
-                      border: '1.5px solid var(--color-border)',
-                      background: 'var(--color-surface)',
-                      color: 'var(--color-text-secondary)',
-                      fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                      fontFamily: 'var(--font-family)',
-                      transition: 'border-color .15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-primary)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
-                  >
-                    <HiRefresh style={{ width: 14, height: 14, ...(loadingClaims ? { animation: 'spin 1s linear infinite' } : {}) }} />
-                    Refresh Claims
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setSelectedUser(null)}
+                      style={{
+                        padding: '9px 16px', borderRadius: 12,
+                        border: '1.5px solid var(--color-border)',
+                        background: 'var(--color-surface)',
+                        color: 'var(--color-primary)',
+                        fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        fontFamily: 'var(--font-family)',
+                      }}
+                    >
+                      ← Back to All
+                    </button>
+                    <button
+                      onClick={() => fetchClaims(selectedUser.id)}
+                      disabled={loadingClaims}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 7,
+                        padding: '9px 16px', borderRadius: 12,
+                        border: '1.5px solid var(--color-border)',
+                        background: 'var(--color-surface)',
+                        color: 'var(--color-text-secondary)',
+                        fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        fontFamily: 'var(--font-family)',
+                        transition: 'border-color .15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-primary)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+                    >
+                      <HiRefresh style={{ width: 14, height: 14, ...(loadingClaims ? { animation: 'spin 1s linear infinite' } : {}) }} />
+                      Sync
+                    </button>
+                  </div>
                 </div>
 
                 {/* ── Claims Table ── */}
@@ -592,14 +786,15 @@ export default function AdminClaims() {
                     <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text)' }}>Claim Records</span>
                     {!loadingClaims && (
                       <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-secondary)', opacity: .45 }}>
-                        {claims.length} {claims.length === 1 ? 'record' : 'records'}
+                        {totalClaimsPages > 1 ? `Page ${currentClaimsPage} of ${totalClaimsPages}` : `${claims.length} records`}
+                        {isSubsequentLoadingClaims && <span style={{ marginLeft: 8, color: 'var(--color-primary)' }}>• Updating...</span>}
                       </span>
                     )}
                   </div>
 
                   {loadingClaims ? (
                     <div style={{ padding: '24px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {[1,2,3].map(i => (
+                      {[1, 2, 3].map(i => (
                         <div key={i} style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                           <div className="skel" style={{ height: 13, flex: 1 }} />
                           <div className="skel" style={{ height: 13, width: 80 }} />
@@ -615,7 +810,8 @@ export default function AdminClaims() {
                       No claims found for this customer.
                     </p>
                   ) : (
-                    <div style={{ overflowX: 'auto' }}>
+                    <>
+                      <div style={{ overflowX: 'auto' }}>
                       <table className="c-table">
                         <thead>
                           <tr>
@@ -634,7 +830,11 @@ export default function AdminClaims() {
                               <td data-label="Amount">
                                 <span className="mono" style={{ fontWeight: 700, fontSize: 14 }}>₹{claim.claimAmount?.toLocaleString()}</span>
                               </td>
-                              <td data-label="Status"><Badge status={claim.status} /></td>
+                              <td data-label="Status">
+                                <div className={claim.status === 'SUBMITTED' ? 'blink-text' : ''}>
+                                  <Badge status={claim.status} />
+                                </div>
+                              </td>
                               <td data-label="Actions" style={{ textAlign: 'right', paddingRight: 18 }}>
                                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                                   <button
@@ -667,7 +867,28 @@ export default function AdminClaims() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                      </div>
+                      {/* Claims Pagination */}
+                      {totalClaimsPages > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 15, padding: '20px 0', borderTop: '1px solid var(--color-border)', marginTop: 10 }}>
+                          <button 
+                            className="c-page-btn"
+                            disabled={currentClaimsPage === 1}
+                            onClick={() => fetchClaims(selectedUser.id, currentClaimsPage - 1)}
+                          >
+                            ← Prev
+                          </button>
+                          <span className="mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', opacity: .7, fontWeight: 700 }}>{currentClaimsPage} / {totalClaimsPages}</span>
+                          <button 
+                            className="c-page-btn"
+                            disabled={currentClaimsPage === totalClaimsPages}
+                            onClick={() => fetchClaims(selectedUser.id, currentClaimsPage + 1)}
+                          >
+                            Next →
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -717,12 +938,12 @@ export default function AdminClaims() {
             )}
           </div>
 
-           {(reviewStatus === 'APPROVED' || reviewStatus === 'REJECTED') && (
+          {(reviewStatus === 'APPROVED' || reviewStatus === 'REJECTED') && (
             <div className="fade-up">
               <Textarea
                 label="Admin Remark *"
                 value={reviewRemark}
-                onChange={e => setReviewRemark(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReviewRemark(e.target.value)}
                 placeholder="Explain the reason for this decision (this will be sent to the customer)..."
                 rows={3}
               />
@@ -750,7 +971,7 @@ export default function AdminClaims() {
       >
         {loadingDetail ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
-            {[1,2,3].map(i => <div key={i} className="skel" style={{ height: 60, borderRadius: 14 }} />)}
+            {[1, 2, 3].map(i => <div key={i} className="skel" style={{ height: 60, borderRadius: 14 }} />)}
           </div>
         ) : claimDetail ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

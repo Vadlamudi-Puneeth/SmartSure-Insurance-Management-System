@@ -96,7 +96,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
 
     @Transactional
     @CacheEvict(value = "user_policies", allEntries = true)
-    public UserPolicyResponseDTO requestCancellation(Long userPolicyId) {
+    public UserPolicyResponseDTO requestCancellation(Long userPolicyId, String reason) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Long currentUserId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
 
@@ -112,6 +112,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         }
 
         userPolicy.setStatus(PolicyStatus.PENDING_CANCELLATION);
+        userPolicy.setCancellationReason(reason);
         userPolicyRepository.save(userPolicy);
 
         // Send Cancellation Request Notification (Asynchronous)

@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 import com.group2.claims_service.dto.ClaimRequestDTO;
+import com.group2.claims_service.dto.PageResponseDTO;
 import com.group2.claims_service.dto.ClaimResponseDTO;
 import com.group2.claims_service.dto.ClaimStatsDTO;
 import com.group2.claims_service.dto.ClaimStatusUpdateDTO;
@@ -102,11 +103,30 @@ public class ClaimController {
 		return ResponseEntity.ok(claimService.getClaimsByUserId(userId));
 	}
 
+    @GetMapping("/user/{userId}/paginated")
+    @PreAuthorize("hasRole('ADMIN') or principal.equals(#userId)")
+    public ResponseEntity<PageResponseDTO<ClaimResponseDTO>> getClaimsByUserIdPaginated(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size,
+            @RequestParam(defaultValue = "") String query) {
+        return ResponseEntity.ok(claimService.getClaimsByUserIdPaginated(userId, page, size, query));
+    }
+
 	@GetMapping
 	@PreAuthorize("hasRole('ADMIN')")
 	public ResponseEntity<List<ClaimResponseDTO>> getAllClaims() {
 		return ResponseEntity.ok(claimService.getAllClaims());
 	}
+
+    @GetMapping("/paginated")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PageResponseDTO<ClaimResponseDTO>> getAllClaimsPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size,
+            @RequestParam(defaultValue = "") String query) {
+        return ResponseEntity.ok(claimService.getAllClaimsPaginated(page, size, query));
+    }
 	
 	// Stats endpoint (matches Feign client path /api/claims/stats)
 	@GetMapping("/stats")

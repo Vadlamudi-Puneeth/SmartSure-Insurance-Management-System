@@ -16,6 +16,7 @@ public interface IAdminService {
     ResponseEntity<byte[]> downloadClaimDocument(Long claimId);
     List<ClaimDTO> getAllClaims();
     List<UserDTO> getAllUsers();
+    java.util.Map<String, Object> getFilteredUsers(int page, int size, String search, String policyStatus, String claimStatus);
     PolicyDTO createPolicy(PolicyRequestDTO dto);
     PolicyDTO updatePolicy(Long id, PolicyRequestDTO dto);
     void deletePolicy(Long id);

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.group2.auth_service.dto.AuthResponse;
 import com.group2.auth_service.dto.LoginRequest;
+import com.group2.auth_service.dto.PageResponseDTO;
 import com.group2.auth_service.dto.RegisterRequest;
 import com.group2.auth_service.dto.ResetPasswordRequest;
 import com.group2.auth_service.dto.UserProfileRequest;
@@ -72,6 +73,11 @@ public class AuthController {
         return ResponseEntity.ok("Password reset successfully");
     }
 
+    @GetMapping("/profile")
+    public ResponseEntity<UserResponseDTO> getProfile() {
+        return ResponseEntity.ok(service.getProfile());
+    }
+
     @PutMapping("/profile")
     public ResponseEntity<UserResponseDTO> updateProfile(@RequestBody UserProfileRequest request) {
         return ResponseEntity.ok(service.updateProfile(request));
@@ -85,6 +91,14 @@ public class AuthController {
     @GetMapping("/users")
     public ResponseEntity<List<UserResponseDTO>> getAllUsers() {
         return ResponseEntity.ok(service.getAllUsers());
+    }
+
+    @GetMapping("/users/paginated")
+    public ResponseEntity<PageResponseDTO<UserResponseDTO>> getUsersPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "") String query) {
+        return ResponseEntity.ok(service.getAllUsersPaginated(page, size, query));
     }
 
     @PostMapping("/refresh-token")

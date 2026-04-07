@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../../shared/hooks/reduxHooks';
 import { selectCurrentUser, loginSuccess } from '../auth/store/authSlice';
 import { authAPI } from '../../core/services/api';
@@ -37,8 +37,8 @@ function FloatingOrbs() {
     <div className="pointer-events-none fixed inset-0 overflow-hidden z-0" aria-hidden>
       {[
         { size: 320, top: '-80px', left: '-100px', delay: 0, opacity: 0.06 },
-        { size: 220, top: '40%',   right: '-60px', delay: 1.2, opacity: 0.05 },
-        { size: 160, bottom: '10%', left: '30%',  delay: 0.6, opacity: 0.04 },
+        { size: 220, top: '40%', right: '-60px', delay: 1.2, opacity: 0.05 },
+        { size: 160, bottom: '10%', left: '30%', delay: 0.6, opacity: 0.04 },
       ].map((orb, i) => (
         <motion.div
           key={i}
@@ -202,6 +202,28 @@ export default function Profile() {
     address: user?.address || '',
   });
 
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await authAPI.getProfile();
+        setFormData({
+          name: res.data.name || '',
+          phone: res.data.phone || '',
+          address: res.data.address || '',
+        });
+        // Sync with Redux if backend has fresher info
+        const updatedUser = { ...user, ...res.data };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        if (user) {
+          dispatch(loginSuccess({ ...updatedUser, token: user.token }));
+        }
+      } catch (err: any) {
+        console.error('Failed to sync fresh profile:', err);
+      }
+    };
+    fetchProfile();
+  }, [dispatch]);
+
   // Admin Guard: Don't show profile for admins
   if (user?.role === 'ADMIN') {
     return (
@@ -225,12 +247,20 @@ export default function Profile() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Basic phone validation
+    if (!/^[6-9]\d{9}$/.test(formData.phone)) {
+      toast.error('Please enter a valid 10-digit phone number');
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await authAPI.updateProfile(formData);
       const updatedUser = { ...user, ...res.data };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       if (user) {
-        dispatch(loginSuccess({ ...updatedUser, token: user.token })); 
+        dispatch(loginSuccess({ ...updatedUser, token: user.token }));
       }
       setSaved(true);
       toast.success('Profile updated successfully!');
@@ -350,8 +380,8 @@ export default function Profile() {
               {/* Account info chips */}
               <motion.div variants={cardVariants} className="space-y-2">
                 <StatChip icon={HiShieldCheck} label="Account Status" value="Verified" delay={0} />
-                <StatChip icon={HiPhone}       label="Phone"         value={formData.phone || user?.phone} delay={1} />
-                <StatChip icon={HiLocationMarker} label="Address"   value={formData.address || user?.address} delay={2} />
+                <StatChip icon={HiPhone} label="Phone" value={formData.phone || user?.phone} delay={1} />
+                <StatChip icon={HiLocationMarker} label="Address" value={formData.address || user?.address} delay={2} />
               </motion.div>
             </motion.div>
 
@@ -407,10 +437,11 @@ export default function Profile() {
 
                     <AnimatedField label="Phone Number" icon={HiPhone} index={2}>
                       <input
-                        type="text"
+                        type="tel"
                         value={formData.phone}
                         onChange={handleChange('phone')}
-                        placeholder="+91 98765 43210"
+                        placeholder="9876543210"
+                        maxLength={10}
                         className={inputClass}
                         style={inputStyle}
                       />

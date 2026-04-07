@@ -43,8 +43,11 @@ public class PolicyCommandController {
     }
 
     @PutMapping("/policies/user-policies/{id}/request-cancellation")
-    public ResponseEntity<UserPolicyResponseDTO> requestCancellation(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(commandService.requestCancellation(id));
+    public ResponseEntity<UserPolicyResponseDTO> requestCancellation(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = (body != null) ? body.get("reason") : null;
+        return ResponseEntity.ok(commandService.requestCancellation(id, reason));
     }
 
     @PutMapping("/admin/policies/user-policies/{id}/approve-cancellation")

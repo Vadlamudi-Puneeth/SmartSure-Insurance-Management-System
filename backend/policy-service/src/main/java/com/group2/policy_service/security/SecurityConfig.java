@@ -31,14 +31,15 @@ public class SecurityConfig {
             	    // Admin APIs
             	    .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-            	    // CUSTOMER only APIs
-            	    .requestMatchers("/api/policies/purchase").hasRole("CUSTOMER")
-            	    .requestMatchers("/api/policies/{id}").hasRole("CUSTOMER")
-
             	    // COMMON APIs
+            	    .requestMatchers("/api/policies/search").hasAnyRole("CUSTOMER", "ADMIN")
             	    .requestMatchers("/api/policies/user/**").hasAnyRole("CUSTOMER", "ADMIN")
             	    .requestMatchers("/api/policies").hasAnyRole("CUSTOMER", "ADMIN")
             	    .requestMatchers("/api/policy-types").hasAnyRole("CUSTOMER", "ADMIN")
+
+            	    // CUSTOMER only APIs
+            	    .requestMatchers("/api/policies/purchase").hasRole("CUSTOMER")
+            	    .requestMatchers("/api/policies/{id}").hasAnyRole("CUSTOMER", "ADMIN")
 
             	    // fallback
             	    .anyRequest().authenticated()

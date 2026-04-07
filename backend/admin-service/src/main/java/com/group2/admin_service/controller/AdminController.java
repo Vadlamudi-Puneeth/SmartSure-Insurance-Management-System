@@ -98,4 +98,15 @@ public class AdminController {
     public ResponseEntity<List<UserDTO>> getAllUsers() {
         return ResponseEntity.ok(adminService.getAllUsers());
     }
+
+    // Get paginated users with complex cross-service filters (status and search)
+    @GetMapping("/users/stats-paginated")
+    public ResponseEntity<java.util.Map<String, Object>> getFilteredUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(required = false) String policyStatus,
+            @RequestParam(required = false) String claimStatus) {
+        return ResponseEntity.ok(adminService.getFilteredUsers(page, size, search, policyStatus, claimStatus));
+    }
 }

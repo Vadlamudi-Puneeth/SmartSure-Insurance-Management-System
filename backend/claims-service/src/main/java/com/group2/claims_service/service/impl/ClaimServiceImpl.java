@@ -5,6 +5,9 @@ import com.group2.claims_service.service.IClaimService;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import com.group2.claims_service.dto.PageResponseDTO;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -319,6 +322,50 @@ public class ClaimServiceImpl implements IClaimService {
                     return r;
                 })
                 .toList();
+    }
+
+    @Override
+    public PageResponseDTO<ClaimResponseDTO> getAllClaimsPaginated(int page, int size, String query) {
+        Page<Claim> claimPage = claimRepository.findAllPaginated(query, PageRequest.of(page, size));
+        List<ClaimResponseDTO> content = claimPage.getContent().stream()
+                .map(c -> {
+                    ClaimResponseDTO r = claimMapper.mapToResponse(c);
+                    populateHasDocument(r);
+                    populateAdminRemark(r, c);
+                    return r;
+                })
+                .toList();
+
+        return new PageResponseDTO<>(
+            content,
+            claimPage.getNumber(),
+            claimPage.getSize(),
+            claimPage.getTotalElements(),
+            claimPage.getTotalPages(),
+            claimPage.isLast()
+        );
+    }
+
+    @Override
+    public PageResponseDTO<ClaimResponseDTO> getClaimsByUserIdPaginated(Long userId, int page, int size, String query) {
+        Page<Claim> claimPage = claimRepository.findByUserIdPaginated(userId, query, PageRequest.of(page, size));
+        List<ClaimResponseDTO> content = claimPage.getContent().stream()
+                .map(c -> {
+                    ClaimResponseDTO r = claimMapper.mapToResponse(c);
+                    populateHasDocument(r);
+                    populateAdminRemark(r, c);
+                    return r;
+                })
+                .toList();
+
+        return new PageResponseDTO<>(
+            content,
+            claimPage.getNumber(),
+            claimPage.getSize(),
+            claimPage.getTotalElements(),
+            claimPage.getTotalPages(),
+            claimPage.isLast()
+        );
     }
 
 	public ClaimStatsDTO getClaimStats() {

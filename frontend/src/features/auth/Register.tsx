@@ -23,7 +23,10 @@ const detailsSchema = z.object({
     .regex(/[a-z]/, 'One lowercase letter')
     .regex(/[0-9]/, 'One number')
     .regex(/[^A-Za-z0-9]/, 'One special symbol'),
-  phone: z.string().optional(),
+  phone: z.string()
+    .min(10, 'Phone number must be at least 10 digits')
+    .max(10, 'Phone number must be 10 digits')
+    .regex(/^[6-9]\d{9}$/, 'Invalid phone number format'),
   address: z.string().optional(),
 });
 
@@ -258,6 +261,7 @@ export default function Register() {
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none"
                     style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' } as React.CSSProperties} />
                 </div>
+                {detailsErrors.phone && <p className="text-red-500 text-xs mt-1">{detailsErrors.phone.message}</p>}
               </div>
               
               <div className="space-y-1.5">

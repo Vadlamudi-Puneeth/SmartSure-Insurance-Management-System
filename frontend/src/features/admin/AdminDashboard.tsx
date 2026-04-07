@@ -5,18 +5,16 @@ import {
   HiClipboardList, 
   HiCurrencyRupee, 
   HiTrendingUp, 
-  HiCheckCircle, 
-  HiXCircle,
   HiShieldCheck
 } from 'react-icons/hi';
-import { StatCard, PageHeader, Card, Badge } from '../../shared/components/UI';
+import { StatCard, PageHeader, Card } from '../../shared/components/UI';
 import LoadingSpinner, { ErrorMessage, EmptyState } from '../../shared/components/UI';
 
 /* ─────────────────────────────────────────────────────────────
    Gauge Chart (compact for KPI row)
 ───────────────────────────────────────────────────────────── */
-function GaugeChart({ value, color = '#10b981', size = 48 }) {
-  const r = 20, cx = 24, cy = 24;
+function GaugeChart({ value, color = '#10b981', size = 48 }: { value: number, color?: string, size?: number }) {
+  const r = 20;
   const circ = Math.PI * r;
   const pct = Math.min((value || 0) / 100, 1);
   const dash = pct * circ;
@@ -29,9 +27,9 @@ function GaugeChart({ value, color = '#10b981', size = 48 }) {
 }
 
 export default function AdminDashboard() {
-  const [reports, setReports] = useState(null);
+  const [reports, setReports] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -39,7 +37,7 @@ export default function AdminDashboard() {
     try {
       const res = await adminAPI.getReports();
       setReports(res.data);
-    } catch (err) {
+    } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -48,16 +46,12 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchReports(); }, []);
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} onRetry={fetchReports} />;
-
-  // Safe calculations
-  const totalClaims = reports?.totalClaims || 1; // Prevent division by zero
+  // Removed early returns to keep layout alive during loading
+  const totalClaims = reports?.totalClaims || 1; 
   const approved = reports?.approvedClaims || 0;
   const rejected = reports?.rejectedClaims || 0;
   const pending = Math.max((reports?.totalClaims || 0) - approved - rejected, 0);
   const approvalRate = ((approved / totalClaims) * 100).toFixed(0);
-
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24 lg:pb-8">
@@ -67,38 +61,49 @@ export default function AdminDashboard() {
           subtitle="System overview and key performance indicators"
         />
         <div className="mt-4 md:mt-0 flex items-center space-x-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-          <span className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span> Live Updates</span>
+          <span className="flex items-center">
+            <span className={`w-2 h-2 rounded-full mr-2 ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500 animate-pulse'}`}></span> 
+            {loading ? 'Refreshing...' : 'Live Updates'}
+          </span>
         </div>
       </div>
 
-      {/* Top Stats Grid - High Priority Health Metrics (Above the Fold) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger-children">
-        <StatCard icon={HiDocumentText} label="Policies" value={reports?.totalPolicies || 0} color="#6366f1" />
-        <StatCard icon={HiClipboardList} label="Claims" value={reports?.totalClaims || 0} color="#06b6d4" />
-        
-        {/* Relocated: Success Rate with Gauge */}
-        <Card className="flex items-center justify-between !py-4 transition-transform hover:-translate-y-1">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest opacity-60 mb-1">Success Rate</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black" style={{ color: 'var(--color-text)' }}>{approvalRate}%</span>
-              <span className="text-[10px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded">+2.1%</span>
-            </div>
+      {loading ? (
+        <div className="py-20 flex items-center justify-center">
+            <LoadingSpinner />
+        </div>
+      ) : error ? (
+        <div className="py-20 flex items-center justify-center">
+            <ErrorMessage message={error} onRetry={fetchReports} />
+        </div>
+      ) : (
+        <>
+          {/* Top Stats Grid - High Priority Health Metrics (Above the Fold) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger-children">
+            <StatCard icon={HiDocumentText} label="Policies" value={reports?.totalPolicies || 0} color="#6366f1" />
+            <StatCard icon={HiClipboardList} label="Claims" value={reports?.totalClaims || 0} color="#06b6d4" />
+            {/* Relocated: Success Rate with Gauge */}
+            <Card className="flex items-center justify-between !py-4 transition-transform hover:-translate-y-1">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest opacity-60 mb-1">Success Rate</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black" style={{ color: 'var(--color-text)' }}>{approvalRate}%</span>
+                  <span className="text-[10px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded">+2.1%</span>
+                </div>
+              </div>
+              <div className="flex flex-col items-center">
+                <GaugeChart value={Number(approvalRate)} size={54} color="#10b981" />
+              </div>
+            </Card>
+
+            <StatCard icon={HiCurrencyRupee} label="Revenue" value={`₹${(reports?.totalRevenue || 0).toLocaleString()}`} color="#f59e0b" />
           </div>
-          <div className="flex flex-col items-center">
-            <GaugeChart value={approvalRate} size={54} color="#10b981" />
-          </div>
-        </Card>
 
-        <StatCard icon={HiCurrencyRupee} label="Revenue" value={`₹${(reports?.totalRevenue || 0).toLocaleString()}`} color="#f59e0b" />
-      </div>
+          {!reports?.totalPolicies && (
+            <EmptyState title="No system activity yet" subtitle="Dashboard will populate once users start buying policies and filing claims." />
+          )}
 
-      {!reports?.totalPolicies && (
-        <EmptyState title="No system activity yet" subtitle="Dashboard will populate once users start buying policies and filing claims." />
-      )}
-
-        {/* Secondary Analytics Row - Balanced 3-column layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
           {/* Claims Overview - Focus Card */}
           <Card className="flex flex-col">
@@ -188,6 +193,8 @@ export default function AdminDashboard() {
             <p className="text-[10px] mt-4 text-center opacity-40 uppercase font-black tracking-tighter">Operational Excellence Verified</p>
           </Card>
         </div>
-      </div>
+      </>
+      )}
+    </div>
   );
 }

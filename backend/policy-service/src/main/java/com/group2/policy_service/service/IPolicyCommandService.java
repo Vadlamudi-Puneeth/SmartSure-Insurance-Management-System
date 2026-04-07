@@ -6,7 +6,7 @@ import com.group2.policy_service.dto.UserPolicyResponseDTO;
 
 public interface IPolicyCommandService {
     UserPolicyResponseDTO purchasePolicy(Long policyId);
-    UserPolicyResponseDTO requestCancellation(Long userPolicyId);
+    UserPolicyResponseDTO requestCancellation(Long userPolicyId, String reason);
     UserPolicyResponseDTO approveCancellation(Long userPolicyId);
     PolicyResponseDTO createPolicy(PolicyRequestDTO dto);
     PolicyResponseDTO updatePolicy(Long id, PolicyRequestDTO dto);

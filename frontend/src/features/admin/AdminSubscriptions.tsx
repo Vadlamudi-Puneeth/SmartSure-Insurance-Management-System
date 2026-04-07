@@ -1,12 +1,30 @@
 import { useState, useEffect, useMemo } from 'react';
-import { adminAPI } from '../../core/services/api';
+import { adminAPI, authAPI } from '../../core/services/api';
 import {
-  HiDocumentText, HiCurrencyRupee, HiCheckCircle, HiRefresh,
+  HiDocumentText, HiCheckCircle, HiRefresh,
   HiSearch, HiUser, HiChevronRight, HiMail, HiPhone, HiExclamation
 } from 'react-icons/hi';
-import { PageHeader, Badge, Button, Card } from '../../shared/components/UI';
-import LoadingSpinner, { ErrorMessage, EmptyState } from '../../shared/components/UI';
+import { Badge } from '../../shared/components/UI';
+import LoadingSpinner from '../../shared/components/UI';
 import toast from 'react-hot-toast';
+import { useDebounce } from '../../shared/hooks/useDebounce';
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+}
+
+interface UserPolicy {
+  id: number;
+  userId: number;
+  policyName: string;
+  status: string;
+  nextDueDate: string;
+  outstandingBalance: number;
+}
 
 /* ─────────────────────────────────────────────────────────────
    Inline styles injected once — no external CSS file needed
@@ -129,6 +147,16 @@ const STYLES = `
       letter-spacing: .05em;
       color: var(--color-text-secondary);
       opacity: .6;
+      flex-shrink: 0;
+      margin-right: 12px;
+    }
+  }
+
+  /* Inline badge fix for mobile */
+  @media (max-width: 768px) {
+    .sub-table td > span {
+      text-align: right;
+      max-width: 60%;
     }
   }
 
@@ -234,67 +262,75 @@ const STYLES = `
    Main Component
 ───────────────────────────────────────────────────────────── */
 export default function AdminSubscriptions() {
-  const [policies, setPolicies] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const [approvingId, setApprovingId] = useState(null);
-  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const debouncedSearch = useDebounce(searchTerm, 500);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
-  const fetchData = async () => {
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [selectedUserPolicies, setSelectedUserPolicies] = useState<UserPolicy[]>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+
+  const fetchData = async (page = 1) => {
     setLoading(true); setError(null);
     try {
-      const [policiesRes, usersRes] = await Promise.all([
-        adminAPI.getAllUserPolicies(),
-        adminAPI.getUsers(),
-      ]);
-      setPolicies(Array.isArray(policiesRes.data) ? policiesRes.data : []);
-      setUsers(Array.isArray(usersRes.data) ? usersRes.data.filter(u => u.role === 'CUSTOMER') : []);
-    } catch {
-      setError('Failed to sync master data from services');
+      const res = await adminAPI.getFilteredUsers(page - 1, 5, debouncedSearch, statusFilter, 'ALL');
+      setUsers(Array.isArray(res.data.content) ? res.data.content : []);
+      setTotalPages(res.data.totalPages || 1);
+      setTotalUsers(res.data.totalElements || 0);
+    } catch (err: any) {
+      setError(err.message || 'Failed to sync users');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const fetchUserPolicies = async (userId: number) => {
+    setLoadingPolicies(true);
+    try {
+      const res = await adminAPI.getUserPolicies(userId);
+      setSelectedUserPolicies(Array.isArray(res.data) ? res.data : []);
+    } catch (err: any) {
+      toast.error('Failed to load user policies.');
+      setSelectedUserPolicies([]);
+    } finally { setLoadingPolicies(false); }
+  };
 
-  const userStats = useMemo(() => {
-    return users.reduce((acc, user) => {
-      const up = policies.filter(p => p.userId === user.id);
-      acc[user.id] = { count: up.length, hasPending: up.some(p => p.status === 'PENDING_CANCELLATION') };
-      return acc;
-    }, {});
-  }, [users, policies]);
+  useEffect(() => {
+    fetchData(currentPage);
+  }, [currentPage, debouncedSearch, statusFilter]);
 
-  const filteredUsers = users.filter(u => {
-    const s = searchTerm.toLowerCase();
-    return (u.name?.toLowerCase().includes(s) || u.email?.toLowerCase().includes(s) || u.phone?.includes(s))
-      && (!showPendingOnly || userStats[u.id]?.hasPending);
-  });
+  const handleUserSelect = (userId: number) => {
+    setSelectedUserId(userId);
+    fetchUserPolicies(userId);
+  };
 
   const selectedUser = users.find(u => u.id === selectedUserId);
-  const selectedUserPolicies = policies.filter(p => p.userId === selectedUserId);
 
   const totalOutstanding = selectedUserPolicies.reduce((s, p) => s + (p.outstandingBalance || 0), 0);
   const pendingCount = selectedUserPolicies.filter(p => p.status === 'PENDING_CANCELLATION').length;
 
-  const handleApprove = async (policyId) => {
+  const handleApprove = async (policyId: number) => {
     setApprovingId(policyId);
     try {
       await adminAPI.approveCancellation(policyId);
       toast.success('Policy cancelled successfully');
-      fetchData();
-    } catch (err) {
+      if (selectedUserId) fetchUserPolicies(selectedUserId);
+    } catch (err: any) {
       toast.error(err.response?.data?.message || 'Approval failed');
     } finally {
       setApprovingId(null);
     }
   };
 
-  if (loading && !policies.length) return <LoadingSpinner />;
+  if (loading && !users.length) return <LoadingSpinner />;
 
   return (
     <>
@@ -315,14 +351,7 @@ export default function AdminSubscriptions() {
         {/* ── Top Stats Row ── */}
         <div className="stat-grid">
           {[
-            { label: 'Total Customers', value: users.length, mono: true },
-            { label: 'Active Policies', value: policies.length, mono: true },
-            {
-              label: 'Pending Requests',
-              value: users.filter(u => userStats[u.id]?.hasPending).length,
-              accent: '#f59e0b',
-              mono: true,
-            },
+            { label: 'Total Customers', value: totalUsers, mono: true },
           ].map(s => (
             <div key={s.label} className="stat-chip">
               <span className="mono" style={{ fontSize: 28, fontWeight: 600, color: s.accent || 'var(--color-text)' }}>
@@ -351,53 +380,72 @@ export default function AdminSubscriptions() {
             {/* Sidebar Header */}
             <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--color-border)' }}>
               <p className="section-label" style={{ marginBottom: 10 }}>Customers</p>
+
+              {/* Status Filter Tabs */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, padding: '0 2px' }}>
+                {['ALL', 'PENDING', 'ACTIVE'].map(status => {
+                  let badgeValue = status === 'PENDING' ? 'PENDING_CANCELLATION' : status;
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => { setStatusFilter(badgeValue); setCurrentPage(1); }}
+                      style={{
+                        flex: 1, padding: '6px 2px', borderRadius: 8, fontSize: '9px', fontWeight: 700,
+                        letterSpacing: '.02em', border: '1.5px solid var(--color-border)',
+                        background: statusFilter === badgeValue ? 'var(--color-primary)12' : 'var(--color-surface)',
+                        color: statusFilter === badgeValue ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                        borderColor: statusFilter === badgeValue ? 'var(--color-primary)' : 'var(--color-border)',
+                        cursor: 'pointer', transition: 'all .15s', textTransform: 'uppercase'
+                      }}
+                    >
+                      {status}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Search */}
               <div style={{ position: 'relative', marginBottom: 10 }}>
                 <HiSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)', opacity: .5, width: 14, height: 14 }} />
                 <input
                   className="sub-search"
-                  placeholder="Search by name or email…"
+                  placeholder="Search by customer name..."
                   value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
+                  onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 />
               </div>
-              {/* Pending filter pill */}
-              <button
-                onClick={() => setShowPendingOnly(!showPendingOnly)}
-                style={{
-                  width: '100%', padding: '8px 12px', borderRadius: 10,
-                  fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase',
-                  border: showPendingOnly ? '1.5px solid #f59e0b' : '1.5px solid var(--color-border)',
-                  background: showPendingOnly ? '#fef3c7' : 'transparent',
-                  color: showPendingOnly ? '#92400e' : 'var(--color-text-secondary)',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  transition: 'all .15s',
-                }}
-              >
-                {showPendingOnly && <HiExclamation style={{ width: 13, height: 13 }} />}
-                {showPendingOnly ? 'Pending Only' : 'All Customers'}
-              </button>
             </div>
 
             {/* List */}
             <div className="slim-scroll" style={{ overflowY: 'auto', padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-              {filteredUsers.map((u, i) => (
+              {users.map((u, i) => (
                 <div
                   key={u.id}
                   className={`user-card${selectedUserId === u.id ? ' active' : ''}`}
-                  onClick={() => setSelectedUserId(u.id)}
+                  onClick={() => handleUserSelect(u.id)}
                   style={{ animationDelay: `${i * 30}ms` }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                        <p className="mono" style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: .6, margin: 0 }}>#{u.id}</p>
-                        {u.phone && <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: .5 }}>• {u.phone}</span>}
-                      </div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</p>
+                      <p style={{ margin: 0, fontSize: 10, color: 'var(--color-text-secondary)' }}>
+                        #{u.id} {u.email && `• ${u.email}`}
+                      </p>
+                      {(u as any).policyCount > 0 && (
+                        <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {(u as any).hasPendingPolicy ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                              <div className="pulse-dot" style={{ position: 'relative', top: 0, right: 0 }} /> Pending
+                            </span>
+                          ) : (u as any).hasActivePolicy ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary)15', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)' }} /> Active
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
-                      {userStats[u.id]?.hasPending && <div className="pulse-dot" />}
                       <HiChevronRight style={{
                         width: 14, height: 14,
                         color: 'var(--color-primary)',
@@ -407,31 +455,35 @@ export default function AdminSubscriptions() {
                       }} />
                     </div>
                   </div>
-                  <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
-                      background: 'var(--color-border)', color: 'var(--color-text-secondary)',
-                      letterSpacing: '.04em', textTransform: 'uppercase',
-                    }}>
-                      {userStats[u.id]?.count} {userStats[u.id]?.count === 1 ? 'Policy' : 'Policies'}
-                    </span>
-                    {userStats[u.id]?.hasPending && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
-                        background: '#fef3c7', color: '#92400e', letterSpacing: '.04em', textTransform: 'uppercase',
-                      }}>
-                        Pending
-                      </span>
-                    )}
-                  </div>
                 </div>
               ))}
-              {filteredUsers.length === 0 && (
+              {users.length === 0 && (
                 <p style={{ textAlign: 'center', padding: '32px 0', fontSize: 12, color: 'var(--color-text-secondary)', opacity: .5, fontStyle: 'italic' }}>
-                  No customers match criteria
+                  No customers found
                 </p>
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div style={{ padding: '12px 14px', borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-bg)' }}>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{ background: 'none', border: 'none', color: currentPage === 1 ? '#ccc' : 'var(--color-primary)', fontWeight: 700, fontSize: 10, cursor: currentPage === 1 ? 'default' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
+                >
+                  Prev
+                </button>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: .6 }}>{currentPage} / {totalPages}</span>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{ background: 'none', border: 'none', color: currentPage === totalPages ? '#ccc' : 'var(--color-primary)', fontWeight: 700, fontSize: 10, cursor: currentPage === totalPages ? 'default' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ── RIGHT: Detail Panel ── */}
@@ -502,7 +554,7 @@ export default function AdminSubscriptions() {
                       </div>
                     ))}
                     <button
-                      onClick={fetchData}
+                      onClick={() => fetchData(currentPage)}
                       title="Refresh"
                       style={{
                         width: 44, height: 44, borderRadius: 12, border: '1.5px solid var(--color-border)',
@@ -534,7 +586,7 @@ export default function AdminSubscriptions() {
                     </span>
                   </div>
 
-                  <div style={{ overflowX: 'auto' }}>
+                  <div style={{ overflowX: 'auto', minHeight: 180 }}>
                     <table className="sub-table">
                       <thead>
                         <tr>
@@ -546,7 +598,9 @@ export default function AdminSubscriptions() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedUserPolicies.map(p => {
+                        {loadingPolicies ? (
+                          <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px 0' }}><HiRefresh className="animate-spin inline text-indigo-500 w-5 h-5"/> Fetching policies...</td></tr>
+                        ) : selectedUserPolicies.map(p => {
                           const isPending = p.status === 'PENDING_CANCELLATION';
                           const hasDebt = (p.outstandingBalance || 0) > 0;
                           return (
@@ -592,7 +646,7 @@ export default function AdminSubscriptions() {
                             </tr>
                           );
                         })}
-                        {selectedUserPolicies.length === 0 && (
+                        {!loadingPolicies && selectedUserPolicies.length === 0 && (
                           <tr>
                             <td colSpan={5} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-secondary)', opacity: .4, fontStyle: 'italic', fontSize: 13 }}>
                               No policies found for this customer.

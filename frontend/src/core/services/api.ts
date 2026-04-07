@@ -113,7 +113,10 @@ export const authAPI = {
   forgotPasswordVerifyOtp: (email: string, otp: string) => AUTH_FREE_API.post(`/auth-service/api/auth/forgot-password/verify-otp?email=${email}&otp=${otp}`),
   resetPassword: (data: any) => AUTH_FREE_API.post('/auth-service/api/auth/reset-password', data),
   updateProfile: (data: any) => API.put('/auth-service/api/auth/profile', data),
+  getProfile: () => API.get('/auth-service/api/auth/profile'),
   getUserById: (id: string | number, config?: any) => API.get(`/auth-service/api/auth/users/${id}`, config),
+  getUsersPaginated: (page: number, size: number, query: string) => 
+    API.get(`/auth-service/api/auth/users/paginated?page=${page}&size=${size}&query=${query}`),
 };
 
 export const policyAPI = {
@@ -122,8 +125,10 @@ export const policyAPI = {
   getPolicyTypes: () => API.get('/policy-service/api/policy-types'),
   purchasePolicy: (policyId: string | number) => API.post(`/policy-service/api/policies/purchase?policyId=${policyId}`),
   getUserPolicies: (userId: string | number) => API.get(`/policy-service/api/policies/user/${userId}`),
-  requestCancellation: (id: string | number) => API.put(`/policy-service/api/policies/user-policies/${id}/request-cancellation`, {}),
+  requestCancellation: (id: string | number, reason: string) => API.put(`/policy-service/api/policies/user-policies/${id}/request-cancellation`, { reason }),
   payPremium: (id: string | number, amount: number) => API.put(`/policy-service/api/policies/user-policies/${id}/pay-premium?amount=${amount}`, {}),
+  searchPolicies: (category: string, query: string, page: number, size: number) => 
+    API.get(`/policy-service/api/policies/search?category=${category}&query=${query}&page=${page}&size=${size}`),
 };
 
 export const claimsAPI = {
@@ -139,6 +144,8 @@ export const claimsAPI = {
   getClaimStatus: (claimId: string | number) => API.get(`/claims-service/api/claims/status/${claimId}`),
   getClaimById: (claimId: string | number) => API.get(`/claims-service/api/claims/${claimId}`),
   getClaimsByUser: (userId: string | number) => API.get(`/claims-service/api/claims/user/${userId}`),
+  getClaimsByUserPaginated: (userId: string | number, page: number, size: number, query: string) => 
+    API.get(`/claims-service/api/claims/user/${userId}/paginated?page=${page}&size=${size}&query=${query}`),
   downloadDocument: (claimId: string | number) => API.get(`/claims-service/api/claims/${claimId}/document`, { responseType: 'blob' }),
 };
 
@@ -152,10 +159,20 @@ export const adminAPI = {
   deletePolicy: (id: string | number) => API.delete(`/admin-service/api/admin/policies/${id}`),
   getReports: () => API.get('/admin-service/api/admin/reports'),
   getUsers: () => API.get('/admin-service/api/admin/users'),
+  getFilteredUsers: (page: number, size: number, search: string, policyStatus?: string, claimStatus?: string) => {
+    let url = `/admin-service/api/admin/users/stats-paginated?page=${page}&size=${size}&search=${encodeURIComponent(search)}`;
+    if (policyStatus && policyStatus !== 'ALL') url += `&policyStatus=${policyStatus}`;
+    if (claimStatus && claimStatus !== 'ALL') url += `&claimStatus=${claimStatus}`;
+    return API.get(url);
+  },
+  getPaginatedUserPolicies: (userId: string | number, page: number, size: number) => 
+    API.get(`/policy-service/api/policies/user/${userId}?page=${page}&size=${size}`),
   getAllUserPolicies: () => API.get('/policy-service/api/admin/user-policies'),
   approveCancellation: (id: string | number) => API.put(`/policy-service/api/admin/policies/user-policies/${id}/approve-cancellation`),
   getUserPolicies: (userId: string | number) => API.get(`/policy-service/api/policies/user/${userId}`),
   getAllClaims: () => API.get('/admin-service/api/admin/claims'),
+  getAllClaimsPaginated: (page: number, size: number, query: string) => 
+    API.get(`/claims-service/api/claims/paginated?page=${page}&size=${size}&query=${query}`),
 };
 
 export const paymentAPI = {

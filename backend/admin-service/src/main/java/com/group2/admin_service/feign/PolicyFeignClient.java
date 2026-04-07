@@ -24,7 +24,9 @@ public interface PolicyFeignClient {
 	@DeleteMapping("/api/admin/policies/{id}")
 	void deletePolicy(@PathVariable("id") Long id);
 
+    @GetMapping("/api/admin/user-policies")
+    java.util.List<UserPolicyDTO> getAllUserPolicies();
+
     @GetMapping("/api/user-policies/{id}")
     UserPolicyDTO getUserPolicyById(@PathVariable("id") Long id);
 }
-

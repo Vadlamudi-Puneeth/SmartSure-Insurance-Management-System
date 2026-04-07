@@ -15,6 +15,9 @@ import com.group2.policy_service.dto.UserPolicyResponseDTO;
 import com.group2.policy_service.entity.PolicyType;
 import com.group2.policy_service.service.IPolicyQueryService;
 
+import org.springframework.web.bind.annotation.RequestParam;
+import com.group2.policy_service.dto.PageResponseDTO;
+
 @RestController
 @RequestMapping("/api")
 public class PolicyQueryController {
@@ -28,6 +31,15 @@ public class PolicyQueryController {
     @GetMapping("/policies")
     public List<PolicyResponseDTO> getAllPolicies() {
         return queryService.getAllPolicies();
+    }
+
+    @GetMapping("/policies/search")
+    public ResponseEntity<PageResponseDTO<PolicyResponseDTO>> searchPolicies(
+            @RequestParam(defaultValue = "ALL") String category,
+            @RequestParam(defaultValue = "") String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size) {
+        return ResponseEntity.ok(queryService.searchPolicies(category, query, page, size));
     }
 
     @GetMapping("/policy-types")

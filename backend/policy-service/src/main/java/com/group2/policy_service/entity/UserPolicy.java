@@ -40,6 +40,16 @@ public class UserPolicy extends BaseEntity {
 	private LocalDate nextDueDate;
 	
 	private Double coverageAmount;
+	
+	private String cancellationReason;
+
+	public String getCancellationReason() {
+		return cancellationReason;
+	}
+
+	public void setCancellationReason(String cancellationReason) {
+		this.cancellationReason = cancellationReason;
+	}
 
 	public Double getCoverageAmount() {
 		return coverageAmount;

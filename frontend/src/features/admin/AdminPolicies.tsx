@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { policyAPI, adminAPI } from '../../core/services/api';
-import { HiPlus, HiPencil, HiTrash, HiDocumentText, HiSearch, HiRefresh } from 'react-icons/hi';
-import { PageHeader, Card, Button, Modal, Input, Textarea, Select } from '../../shared/components/UI';
+import { HiPlus, HiPencil, HiTrash, HiDocumentText, HiSearch } from 'react-icons/hi';
+import { Button, Modal, Input, Textarea, Select } from '../../shared/components/UI';
 import LoadingSpinner, { ErrorMessage, EmptyState } from '../../shared/components/UI';
 import toast from 'react-hot-toast';
+import { useDebounce } from '../../shared/hooks/useDebounce';
 
 const STYLES = `
   .pol-root { font-family: var(--font-family); }
@@ -188,14 +189,18 @@ const STYLES = `
 `;
 
 export default function AdminPolicies() {
-  const [policies, setPolicies] = useState([]);
-  const [policyTypes, setPolicyTypes] = useState([]);
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [policyTypes, setPolicyTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isSubsequentLoading, setIsSubsequentLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 500);
 
   const PAGE_SIZE = 10;
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
 
   const [showModal, setShowModal] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState(null);
@@ -206,20 +211,27 @@ export default function AdminPolicies() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
-    setLoading(true); setError(null);
+    if (policies.length === 0) setLoading(true);
+    else setIsSubsequentLoading(true);
+    setError(null);
     try {
       const [policiesRes, typesRes] = await Promise.all([
-        policyAPI.getAllPolicies(),
+        policyAPI.searchPolicies('ALL', debouncedSearch, currentPage - 1, PAGE_SIZE),
         policyAPI.getPolicyTypes(),
       ]);
-      setPolicies(policiesRes.data);
+      setPolicies(policiesRes.data.content);
+      setTotalPages(policiesRes.data.totalPages || 1);
+      setTotalElements(policiesRes.data.totalElements || 0);
       setPolicyTypes(typesRes.data);
-    } catch (err) {
+    } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load policies');
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+      setIsSubsequentLoading(false);
+    }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [currentPage, debouncedSearch]);
 
   const openCreate = () => {
     setEditingPolicy(null);
@@ -227,7 +239,7 @@ export default function AdminPolicies() {
     setShowModal(true);
   };
 
-  const openEdit = (policy) => {
+  const openEdit = (policy: any) => {
     setEditingPolicy(policy);
     setForm({
       policyName: policy.policyName || '',
@@ -255,7 +267,7 @@ export default function AdminPolicies() {
         durationInMonths: Number(form.durationInMonths),
       };
       if (editingPolicy) {
-        await adminAPI.updatePolicy(editingPolicy.id, data);
+        await adminAPI.updatePolicy((editingPolicy as any).id, data);
         toast.success('Policy updated successfully!');
       } else {
         await adminAPI.createPolicy(data);
@@ -263,34 +275,29 @@ export default function AdminPolicies() {
       }
       setShowModal(false);
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err.response?.data?.message || 'Operation failed');
     } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this policy?')) return;
     try {
       await adminAPI.deletePolicy(id);
       toast.success('Policy deleted!');
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to delete policy');
     }
   };
 
-  const filtered = policies.filter(p =>
-    (p.policyName || '').toLowerCase().includes(search.toLowerCase()) ||
-    (p.id || '').toString().includes(search)
-  );
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const currentPolicies = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  // Removed client-side filtering logic
+  const currentPolicies = policies;
 
-  if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={fetchData} />;
 
   /* ── Shared metric cell for mobile cards ── */
-  const MetaCell = ({ label, value, mono, color }) => (
+  const MetaCell = ({ label, value, mono, color }: { label: string, value: any, mono?: boolean, color?: string }) => (
     <div>
       <p className="c-label" style={{ marginBottom: 4 }}>{label}</p>
       <p className={mono ? 'mono' : ''} style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--color-text)', margin: 0 }}>
@@ -326,15 +333,14 @@ export default function AdminPolicies() {
           className="pol-search"
           placeholder="Search policies by name or ID…"
           value={search}
-          onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setSearch(e.target.value); setCurrentPage(1); }}
         />
       </div>
 
       {/* ── Summary strip ── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
-          { label: 'Total', value: policies.length, color: 'var(--color-text)' },
-          { label: 'Showing', value: filtered.length, color: 'var(--color-primary)' },
+          { label: 'Total elements', value: totalElements, color: 'var(--color-primary)' },
         ].map(s => (
           <div key={s.label} style={{
             display: 'flex', alignItems: 'center', gap: 6,
@@ -348,9 +354,14 @@ export default function AdminPolicies() {
             <span style={{ opacity: .6 }}>{s.label}</span>
           </div>
         ))}
+        {isSubsequentLoading && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-primary)' }}><LoadingSpinner size="sm" /> Updating...</div>}
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+          <LoadingSpinner />
+        </div>
+      ) : policies.length === 0 ? (
         <EmptyState
           icon={HiDocumentText} title="No Policies Found"
           description="Try adjusting your search or create a new policy."
@@ -411,15 +422,13 @@ export default function AdminPolicies() {
               </tbody>
             </table>
 
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderTop: '1px solid var(--color-border)' }}>
-                <button className="pag-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>← Prev</button>
-                <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', opacity: .6 }}>
-                  {currentPage} / {totalPages}
-                </span>
-                <button className="pag-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next →</button>
-              </div>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderTop: '1px solid var(--color-border)' }}>
+              <button className="pag-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>← Prev</button>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', opacity: .6 }}>
+                {currentPage} / {Math.max(1, totalPages)}
+              </span>
+              <button className="pag-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Next →</button>
+            </div>
           </div>
 
           {/* ── MOBILE CARDS ── */}
@@ -475,15 +484,13 @@ export default function AdminPolicies() {
             ))}
 
             {/* Mobile pagination */}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 2px' }}>
-                <button className="pag-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>← Prev</button>
-                <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', opacity: .6 }}>
-                  {currentPage} / {totalPages}
-                </span>
-                <button className="pag-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next →</button>
-              </div>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 2px' }}>
+              <button className="pag-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>← Prev</button>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', opacity: .6 }}>
+                {currentPage} / {Math.max(1, totalPages)}
+              </span>
+              <button className="pag-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Next →</button>
+            </div>
           </div>
         </>
       )}
@@ -495,13 +502,13 @@ export default function AdminPolicies() {
           <Input
             label="Policy Name *"
             value={form.policyName}
-            onChange={e => setForm(p => ({ ...p, policyName: e.target.value }))}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, policyName: e.target.value }))}
             placeholder="e.g., Premium Health Plan"
           />
           <Textarea
             label="Description *"
             value={form.description}
-            onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(p => ({ ...p, description: e.target.value }))}
             placeholder="Describe the policy features and terms in detail (no word limit)..."
           />
 
@@ -512,10 +519,10 @@ export default function AdminPolicies() {
                 <Select
                   label="Policy Type"
                   value={form.policyTypeId}
-                  onChange={e => setForm(p => ({ ...p, policyTypeId: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(p => ({ ...p, policyTypeId: e.target.value }))}
                 >
                   <option value="">Select type…</option>
-                  {policyTypes.map(t => (
+                  {policyTypes.map((t: any) => (
                     <option key={t.id} value={t.id}>{t.category} — {t.description}</option>
                   ))}
                 </Select>
@@ -525,21 +532,21 @@ export default function AdminPolicies() {
               label="Premium Amount (₹) *"
               type="number"
               value={form.premiumAmount}
-              onChange={e => setForm(p => ({ ...p, premiumAmount: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, premiumAmount: e.target.value }))}
               placeholder="e.g., 2000"
             />
             <Input
               label="Coverage Amount (₹) *"
               type="number"
               value={form.coverageAmount}
-              onChange={e => setForm(p => ({ ...p, coverageAmount: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, coverageAmount: e.target.value }))}
               placeholder="e.g., 500000"
             />
             <Input
               label="Duration (months) *"
               type="number"
               value={form.durationInMonths}
-              onChange={e => setForm(p => ({ ...p, durationInMonths: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, durationInMonths: e.target.value }))}
               placeholder="e.g., 12"
             />
           </div>

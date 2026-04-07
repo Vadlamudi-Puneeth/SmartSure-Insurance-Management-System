@@ -193,6 +193,68 @@ public class AdminServiceImpl implements IAdminService {
         return Collections.emptyList();
     }
 
+    public java.util.Map<String, Object> getFilteredUsers(int page, int size, String search, String policyStatus, String claimStatus) {
+        List<UserDTO> allUsers = getAllUsers(); // Uses feign with retry fallback
+
+        // 1. Filter by Search Query
+        if (search != null && !search.trim().isEmpty()) {
+            final String q = search.toLowerCase();
+            allUsers = allUsers.stream()
+                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q)) || 
+                             (u.getEmail() != null && u.getEmail().toLowerCase().contains(q)))
+                .toList();
+        }
+
+        // 2. Filter & Enrich Policies
+        List<UserPolicyDTO> policies = Collections.emptyList();
+        try { policies = policyFeignClient.getAllUserPolicies(); } catch (Exception e) { log.warn("Fallback zero policies"); }
+        final List<UserPolicyDTO> finalPolicies = policies;
+
+        if (policyStatus != null && !policyStatus.equalsIgnoreCase("ALL")) {
+            java.util.Set<Long> matchingUserIds = policies.stream()
+                .filter(p -> p.getStatus().equalsIgnoreCase(policyStatus))
+                .map(UserPolicyDTO::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+            allUsers = allUsers.stream().filter(u -> matchingUserIds.contains(u.getId())).toList();
+        }
+
+        // 3. Filter & Enrich Claims
+        List<ClaimDTO> claims = getAllClaims(); // Uses existing feign call with retry fallback
+        if (claimStatus != null && !claimStatus.equalsIgnoreCase("ALL")) {
+            java.util.Set<Long> matchingUserIds = claims.stream()
+                .filter(c -> c.getStatus().equalsIgnoreCase(claimStatus))
+                .map(ClaimDTO::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+            allUsers = allUsers.stream().filter(u -> matchingUserIds.contains(u.getId())).toList();
+        }
+
+        // 4. Manual Pagination
+        int totalElements = allUsers.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int start = Math.min(page * size, totalElements);
+        int end = Math.min(start + size, totalElements);
+        List<UserDTO> pageContent = allUsers.subList(start, end);
+
+        // 5. Enrich only the paginated 5 elements!
+        pageContent.forEach(user -> {
+            List<UserPolicyDTO> uPolicies = finalPolicies.stream().filter(p -> p.getUserId().equals(user.getId())).toList();
+            user.setPolicyCount(uPolicies.size());
+            user.setHasPendingPolicy(uPolicies.stream().anyMatch(p -> "PENDING_CANCELLATION".equalsIgnoreCase(p.getStatus())));
+            user.setHasActivePolicy(uPolicies.stream().anyMatch(p -> "ACTIVE".equalsIgnoreCase(p.getStatus())));
+
+            List<ClaimDTO> uClaims = claims.stream().filter(c -> c.getUserId().equals(user.getId())).toList();
+            user.setHasSubmittedClaim(uClaims.stream().anyMatch(c -> "SUBMITTED".equalsIgnoreCase(c.getStatus())));
+            user.setHasReviewingClaim(uClaims.stream().anyMatch(c -> "UNDER_REVIEW".equalsIgnoreCase(c.getStatus())));
+        });
+
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("content", pageContent);
+        response.put("totalPages", totalPages);
+        response.put("totalElements", totalElements);
+        
+        return response;
+    }
+
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public PolicyDTO createPolicy(PolicyRequestDTO dto) {
         return policyFeignClient.createPolicy(dto);
