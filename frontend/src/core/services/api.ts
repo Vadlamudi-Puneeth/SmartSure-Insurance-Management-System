@@ -1,106 +1,12 @@
-import axios from 'axios';
+import API from '../api/axiosInstance';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8888';
-
-const API = axios.create({
-  baseURL: BASE_URL,
-  timeout: 30000,
-});
-
-// Interceptor to attach token to every request if available
-API.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Variables for token refresh queue management
-let isRefreshing = false;
-let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: any) => void }> = [];
-
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
-const forceLogout = () => {
-  localStorage.clear();
-  window.location.href = '/login';
-};
-
-// Interceptor to handle token expiration (401 errors)
-API.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    // Only attempt refresh if:
-    // 1. Status is 401
-    // 2. Request exists
-    // 3. We haven't already retried this specific request
-    // 4. This is NOT a refresh token request or a login request itself
-    if (
-      error.response?.status !== 401 ||
-      !originalRequest ||
-      originalRequest._retry ||
-      originalRequest.url?.includes('refresh-token') ||
-      originalRequest.url?.includes('login')
-    ) {
-      return Promise.reject(error);
-    }
-
-    originalRequest._retry = true;
-    const refreshToken = localStorage.getItem('refreshToken');
-
-    if (!refreshToken) {
-      forceLogout();
-      return Promise.reject(error);
-    }
-
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      }).then((newToken) => {
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return API(originalRequest);
-      }).catch((err) => Promise.reject(err));
-    }
-
-    isRefreshing = true;
-
-    try {
-      // Use a basic axios call to refresh token to avoid the API interceptor logic loop
-      const response = await axios.post(`${BASE_URL}/auth-service/api/auth/refresh-token?refreshToken=${refreshToken}`);
-
-      const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
-      if (!newAccessToken) throw new Error('Refresh failed');
-
-      localStorage.setItem('token', newAccessToken);
-      if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken);
-
-      processQueue(null, newAccessToken);
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-      return API(originalRequest);
-    } catch (refreshError: any) {
-      processQueue(refreshError, null);
-      forceLogout();
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
-    }
-  }
-);
+/**
+ * ─────────────────────────────────────────────────────────────
+ * API Service Layer
+ * ─────────────────────────────────────────────────────────────
+ * All services now use the shared axiosInstance (from ../api/axiosInstance)
+ * which handles global Bearer tokens and automatic token refreshing.
+ */
 
 export const authAPI = {
   login: (data: any) => API.post('/auth-service/api/auth/login', data),
@@ -182,4 +88,3 @@ export const paymentAPI = {
 };
 
 export default API;
-
