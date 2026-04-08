@@ -39,6 +39,8 @@ export default function MyPolicies() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(5);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // ── Data fetching ──────────────────────────────────────────────────
   const fetchPolicies = async () => {
@@ -46,27 +48,34 @@ export default function MyPolicies() {
     setLoading(true);
     setError(null);
     try {
-      const res = await policyAPI.getUserPolicies(user.id);
-      setPolicies(res.data);
+      setLoadingPolicies(true);
+      // Use paginated endpoint with status filter
+      const res = await policyAPI.getUserPoliciesPaginated(user.id, filter, currentPage - 1, perPage);
+      setPolicies(res.data.content || []);
+      setTotalElements(res.data.totalElements || 0);
+      setTotalPages(res.data.totalPages || 1);
     } catch (err: any) {
       console.error('MyPolicies fetch error:', err);
       setError(err.response?.data?.message || err.response?.data || 'Failed to load your policies');
     } finally {
+      setLoadingPolicies(false);
       setLoading(false);
     }
   };
 
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+
   useEffect(() => {
     if (user?.id) fetchPolicies();
-  }, [user?.id]);
+  }, [user?.id, currentPage, perPage, filter]); // Fetch on page/size/filter change
 
-  // Reset page on filter or perPage change
-  useEffect(() => { setCurrentPage(1); }, [filter, perPage]);
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
 
   // ── Derived data ───────────────────────────────────────────────────
-  const filtered = filter === 'ALL' ? policies : policies.filter((p) => p.status === filter);
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  // Data is now server-filtered and paginated
 
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
@@ -145,7 +154,7 @@ export default function MyPolicies() {
         },
         prefill: {
           email: user?.email,
-          contact: user?.phoneNumber
+          contact: user?.phone
         },
         theme: { color: '#6366f1' },
         modal: {
@@ -185,15 +194,18 @@ export default function MyPolicies() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" style={{ boxSizing: 'border-box', overflowX: 'hidden' }}>
       <PageHeader
         title="My Portfolio"
         subtitle="Manage your active coverage, payments, and policy lifecycles"
         action={
           <Link
             to="/policies"
-            className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
-            style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))' }}
+            className="px-6 py-2.5 rounded-full text-sm font-bold text-white transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-center"
+            style={{ 
+              background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))',
+              display: 'inline-block'
+            }}
           >
             + Explore New Policies
           </Link>
@@ -243,8 +255,15 @@ export default function MyPolicies() {
         })}
       </motion.div>
 
-      {/* ── Empty State ── */}
-      {filtered.length === 0 ? (
+      {/* ── Content ── */}
+      {loadingPolicies ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <LoadingSpinner />
+          <p className="text-xs font-bold animate-pulse" style={{ color: 'var(--color-text-secondary)' }}>
+            Retrieving your portfolio...
+          </p>
+        </div>
+      ) : policies.length === 0 ? (
         <EmptyState
           icon={HiShieldCheck}
           title="No Policies Found"
@@ -268,7 +287,7 @@ export default function MyPolicies() {
           {/* ── Policy List ── */}
           <AnimatePresence mode="popLayout">
             <div className="flex flex-col gap-3">
-              {paginated.map((policy, i) => {
+              {policies.map((policy: any, i: number) => {
                 const hasBalance = policy.outstandingBalance > 0;
                 const isActionable = ['ACTIVE', 'PENDING_CANCELLATION'].includes(policy.status);
 
@@ -308,44 +327,40 @@ export default function MyPolicies() {
                           <Badge status={policy.status} />
                         </div>
                         {/* Meta row */}
-                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
                           <span
-                            className="text-xs flex items-center gap-1"
+                            className="text-xs flex items-center gap-1 font-medium"
                             style={{ color: 'var(--color-text-secondary)' }}
                           >
-                            <HiCurrencyRupee className="w-3.5 h-3.5" />
+                            <HiCurrencyRupee className="w-3.5 h-3.5 text-[var(--color-primary)]" />
                             ₹{policy.premiumAmount?.toLocaleString()}
-                            <span className="opacity-50">/mo</span>
+                            <span className="opacity-60">/mo</span>
                           </span>
                           <span
-                            className="text-xs flex items-center gap-1"
+                            className="text-xs flex items-center gap-1 font-medium"
                             style={{ color: 'var(--color-text-secondary)' }}
                           >
-                            <HiCalendar className="w-3.5 h-3.5" />
+                            <HiCalendar className="w-3.5 h-3.5 text-[var(--color-primary)]" />
                             {policy.durationInMonths || 12}m term
                           </span>
-                          <span
-                            className="text-xs flex items-center gap-1"
-                            style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}
-                          >
-                            <HiShieldCheck className="w-3.5 h-3.5" />
-                            ₹{((policy.coverageAmount || 0)/100000).toFixed(1)}L Coverage
-                          </span>
-                          <span
-                            className="text-xs"
-                            style={{ color: 'var(--color-text-secondary)' }}
-                          >
-                            {policy.startDate || 'N/A'} → {policy.endDate || 'N/A'}
-                          </span>
-                          {policy.nextDueDate && (
+                          <div className="flex items-center gap-1">
                             <span
-                              className="text-xs flex items-center gap-1"
-                              style={{ color: 'var(--color-text-secondary)' }}
+                              className="text-xs flex items-center gap-1 font-bold"
+                              style={{ color: 'var(--color-primary)' }}
                             >
-                              <HiCalendar className="w-3.5 h-3.5 text-amber-500" />
-                              Due: <strong style={{ color: 'var(--color-text)' }}>{policy.nextDueDate}</strong>
+                              <HiShieldCheck className="w-3.5 h-3.5" />
+                              ₹{((policy.coverageAmount || 0)/100000).toFixed(1)}L Coverage
                             </span>
-                          )}
+                          </div>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 opacity-70">
+                          <span className="text-[10px] uppercase font-bold tracking-tight" style={{ color: 'var(--color-text-secondary)' }}>
+                            {policy.startDate}
+                          </span>
+                          <span className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>→</span>
+                          <span className="text-[10px] uppercase font-bold tracking-tight" style={{ color: 'var(--color-text-secondary)' }}>
+                            {policy.endDate || 'N/A'}
+                          </span>
                         </div>
                       </div>
 
@@ -483,8 +498,8 @@ export default function MyPolicies() {
 
             {/* Info */}
             <p className="text-sm order-last sm:order-none" style={{ color: 'var(--color-text-secondary)' }}>
-              {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of{' '}
-              <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{filtered.length}</span>
+              {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, totalElements)} of{' '}
+              <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{totalElements}</span>
             </p>
 
             {/* Page buttons */}

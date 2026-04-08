@@ -11,6 +11,8 @@ import com.group2.policy_service.entity.UserPolicy;
 @Repository
 public interface UserPolicyRepository extends JpaRepository<UserPolicy, Long> {
 	List<UserPolicy> findByUserId(Long userId);
+	org.springframework.data.domain.Page<UserPolicy> findByUserId(Long userId, org.springframework.data.domain.Pageable pageable);
+	org.springframework.data.domain.Page<UserPolicy> findByUserIdAndStatus(Long userId, com.group2.policy_service.entity.PolicyStatus status, org.springframework.data.domain.Pageable pageable);
 
 	@Query("SELECT u FROM UserPolicy u WHERE u.status = 'ACTIVE' AND u.endDate < CURRENT_DATE")
 	List<UserPolicy> findExpiredActivePolicies();

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { adminAPI, authAPI } from '../../core/services/api';
+import { useState, useEffect } from 'react';
+import { adminAPI } from '../../core/services/api';
 import {
   HiDocumentText, HiCheckCircle, HiRefresh,
   HiSearch, HiUser, HiChevronRight, HiMail, HiPhone, HiExclamation
@@ -38,13 +38,15 @@ const STYLES = `
   /* Sidebar card */
   .user-card {
     position: relative;
-    padding: 14px 16px;
+    padding: 16px 18px;
     border-radius: 14px;
     cursor: pointer;
     transition: all .2s cubic-bezier(.4,0,.2,1);
     border: 1.5px solid var(--color-border);
     background: var(--color-surface);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .user-card::before {
     content: '';
@@ -66,15 +68,15 @@ const STYLES = `
 
   /* Pulse dot */
   .pulse-dot {
-    width: 8px; height: 8px;
+    width: 10px; height: 10px;
     border-radius: 50%;
-    background: #f59e0b;
-    box-shadow: 0 0 0 0 #f59e0b66;
+    background: #fbbf24;
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6);
     animation: pulse-ring 1.4s ease-out infinite;
   }
   @keyframes pulse-ring {
-    0%   { box-shadow: 0 0 0 0 #f59e0b66; }
-    70%  { box-shadow: 0 0 0 8px transparent; }
+    0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6); }
+    70%  { box-shadow: 0 0 0 10px transparent; }
     100% { box-shadow: 0 0 0 0 transparent; }
   }
 
@@ -137,8 +139,22 @@ const STYLES = `
   @media (max-width: 768px) {
     .sub-table thead { display: none; }
     .sub-table tbody, .sub-table tr, .sub-table td { display: block; width: 100%; }
-    .sub-table tr { padding: 16px; border-bottom: 1.5px solid var(--color-border); position: relative; }
-    .sub-table td { border-bottom: none; padding: 4px 0; display: flex; justify-content: space-between; align-items: center; }
+    .sub-table tr { 
+      padding: 16px; 
+      border-bottom: 2px solid var(--color-border); 
+      background: var(--color-surface);
+      margin-bottom: 12px;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+    .sub-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--color-border)40;
+    }
+    .sub-table td:last-child { border-bottom: none; }
     .sub-table td::before {
       content: attr(data-label);
       font-weight: 700;
@@ -150,23 +166,33 @@ const STYLES = `
       flex-shrink: 0;
       margin-right: 12px;
     }
-  }
-
-  /* Inline badge fix for mobile */
-  @media (max-width: 768px) {
     .sub-table td > span {
       text-align: right;
-      max-width: 60%;
+      max-width: fit-content;
+      display: inline-flex !important;
     }
   }
 
-  /* Layout */
-  .sub-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
-  @media (max-width: 1024px) {
+  .sub-layout {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 24px;
+    align-items: start;
+    max-width: 100%;
+  }
+  @media (max-width: 1280px) {
+    .sub-layout { grid-template-columns: 300px 1fr; gap: 16px; }
+  }
+  @media (max-width: 1100px) {
     .sub-layout { grid-template-columns: 1fr; }
   }
 
-  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+  }
   @media (max-width: 640px) {
     .stat-grid { grid-template-columns: 1fr; gap: 12px; }
   }
@@ -236,17 +262,20 @@ const STYLES = `
     bottom: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
-    white-space: nowrap;
+    white-space: normal;
+    width: 140px;
     background: #dc2626;
     color: #fff;
     font-size: 10px;
     font-weight: 700;
-    padding: 6px 10px;
+    padding: 8px 10px;
     border-radius: 8px;
     box-shadow: 0 4px 14px #dc262640;
     opacity: 0;
     pointer-events: none;
     transition: opacity .15s;
+    text-align: center;
+    z-index: 10;
   }
   .debt-wrap:hover .debt-tooltip { opacity: 1; }
   .debt-tooltip::after {
@@ -256,6 +285,13 @@ const STYLES = `
     border: 5px solid transparent;
     border-top-color: #dc2626;
   }
+
+  /* Root adjustments */
+  .sub-root {
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  * { box-sizing: border-box; }
 `;
 
 /* ─────────────────────────────────────────────────────────────
@@ -322,11 +358,22 @@ export default function AdminSubscriptions() {
     try {
       await adminAPI.approveCancellation(policyId);
       toast.success('Policy cancelled successfully');
-      
+
       // Optimistically update the UI to avoid waiting for a backend response delay
       setSelectedUserPolicies(prev => prev.map(p => p.id === policyId ? { ...p, status: 'CANCELLED' } : p));
-      
+
+      // Optimistically update the sidebar to remove pending badge
+      setUsers(prev => prev.map(u => {
+        if (u.id === selectedUserId) {
+          const userPendingCount = selectedUserPolicies.filter(p => p.status === 'PENDING_CANCELLATION').length;
+          // If this was the last pending one, clear the flag
+          return { ...u, hasPendingPolicy: userPendingCount > 1 };
+        }
+        return u;
+      }));
+
       if (selectedUserId) fetchUserPolicies(selectedUserId);
+      fetchData(currentPage);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Approval failed');
     } finally {
@@ -343,22 +390,28 @@ export default function AdminSubscriptions() {
 
         {/* ── Page Header ── */}
         <div style={{ marginBottom: 32 }}>
-          <p className="section-label" style={{ marginBottom: 8 }}>Admin Console</p>
-          <h1 className="serif" style={{ fontSize: 36, color: 'var(--color-text)', lineHeight: 1.15, margin: 0 }}>
-            Subscription Management
+          <h1 className="serif" style={{ fontSize: 38, letterSpacing: '-.03em', color: 'var(--color-primary)', marginBottom: 2 }}>
+            Portfolio
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8, maxWidth: 520 }}>
-            Audit insurance portfolios, review cancellation requests, and enforce ledger compliance across all customer accounts.
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 32, fontWeight: 500 }}>
+            Managing <span style={{ color: 'var(--color-text)', fontWeight: 800 }}>{totalUsers}</span> active users across your network
           </p>
+
+          {error && (
+            <div className="fade-up" style={{ padding: '16px 20px', borderRadius: 12, backgroundColor: '#fef2f2', border: '1px solid #fee2e2', color: '#b91c1c', fontSize: 13, marginBottom: 24, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <HiExclamation className="w-5 h-5" /> {error}
+              <button onClick={() => fetchData(currentPage)} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
+            </div>
+          )}
         </div>
 
         {/* ── Top Stats Row ── */}
         <div className="stat-grid">
           {[
-            { label: 'Total Customers', value: totalUsers, mono: true },
+            { label: 'Total Customers', value: totalUsers, color: 'var(--color-text)' },
           ].map(s => (
             <div key={s.label} className="stat-chip">
-              <span className="mono" style={{ fontSize: 28, fontWeight: 600, color: s.accent || 'var(--color-text)' }}>
+              <span className="mono" style={{ fontSize: 28, fontWeight: 600, color: s.color }}>
                 {s.value}
               </span>
               <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', opacity: .7 }}>
@@ -436,10 +489,21 @@ export default function AdminSubscriptions() {
                         #{u.id} {u.email && `• ${u.email}`}
                       </p>
                       {(u as any).policyCount > 0 && (
-                        <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <div style={{ marginTop: 10, display: 'flex', gap: 6, alignItems: 'center', paddingBottom: 2 }}>
                           {(u as any).hasPendingPolicy ? (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                              <div className="pulse-dot" style={{ position: 'relative', top: 0, right: 0 }} /> Pending
+                            <span style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              background: 'rgba(245, 158, 11, 0.15)',
+                              color: '#fbbf24',
+                              padding: '4px 10px',
+                              borderRadius: 6,
+                              fontSize: 10,
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              letterSpacing: '.08em',
+                              border: '1px solid rgba(245, 158, 11, 0.3)'
+                            }}>
+                              <div className="pulse-dot" /> PENDING
                             </span>
                           ) : (u as any).hasActivePolicy ? (
                             <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary)15', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
@@ -471,7 +535,7 @@ export default function AdminSubscriptions() {
             {/* Pagination Controls */}
             {totalPages > 1 && (
               <div style={{ padding: '12px 14px', borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-bg)' }}>
-                <button 
+                <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                   style={{ background: 'none', border: 'none', color: currentPage === 1 ? '#ccc' : 'var(--color-primary)', fontWeight: 700, fontSize: 10, cursor: currentPage === 1 ? 'default' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
@@ -479,7 +543,7 @@ export default function AdminSubscriptions() {
                   Prev
                 </button>
                 <span className="mono" style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: .6 }}>{currentPage} / {totalPages}</span>
-                <button 
+                <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
                   style={{ background: 'none', border: 'none', color: currentPage === totalPages ? '#ccc' : 'var(--color-primary)', fontWeight: 700, fontSize: 10, cursor: currentPage === totalPages ? 'default' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
@@ -603,7 +667,7 @@ export default function AdminSubscriptions() {
                       </thead>
                       <tbody>
                         {loadingPolicies ? (
-                          <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px 0' }}><HiRefresh className="animate-spin inline text-indigo-500 w-5 h-5"/> Fetching policies...</td></tr>
+                          <tr><td colSpan={5} style={{ textAlign: 'center', padding: '40px 0' }}><HiRefresh className="animate-spin inline text-indigo-500 w-5 h-5" /> Fetching policies...</td></tr>
                         ) : selectedUserPolicies.map(p => {
                           const isPending = p.status === 'PENDING_CANCELLATION';
                           const hasDebt = (p.outstandingBalance || 0) > 0;

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { adminAPI, authAPI, claimsAPI } from '../../core/services/api';
+import { adminAPI, claimsAPI } from '../../core/services/api';
 import {
   HiClipboardList, HiSearch, HiCheckCircle, HiEye,
   HiDownload, HiUser, HiChevronRight, HiRefresh, HiClock,
-  HiArrowRight, HiMail, HiPhone
+  HiArrowRight
 } from 'react-icons/hi';
 import { Badge, Button, Modal, Textarea } from '../../shared/components/UI';
 import toast from 'react-hot-toast';
@@ -47,13 +47,15 @@ const STYLES = `
   /* Sidebar user cards */
   .c-user-card {
     position: relative;
-    padding: 13px 15px;
+    padding: 16px 18px;
     border-radius: 14px;
     cursor: pointer;
     transition: all .18s cubic-bezier(.4,0,.2,1);
     border: 1.5px solid var(--color-border);
     background: var(--color-surface);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
   }
   .c-user-card::before {
     content: '';
@@ -158,8 +160,23 @@ const STYLES = `
   @media (max-width: 768px) {
     .c-table thead { display: none; }
     .c-table tbody, .c-table tr, .c-table td { display: block; width: 100%; }
-    .c-table tr { padding: 16px; border-bottom: 1.5px solid var(--color-border); position: relative; }
-    .c-table td { border-bottom: none; padding: 4px 0; display: flex; justify-content: space-between; align-items: center; }
+    .c-table tr { 
+      padding: 16px; 
+      border-bottom: 2px solid var(--color-border); 
+      background: var(--color-surface);
+      margin-bottom: 12px;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+      position: relative;
+    }
+    .c-table td { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-border)40;
+    }
+    .c-table td:last-child { border-bottom: none; }
     .c-table td::before {
       content: attr(data-label);
       font-weight: 700;
@@ -206,13 +223,22 @@ const STYLES = `
   .slim-scroll::-webkit-scrollbar-track { background: transparent; }
   .slim-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
 
-  /* Layout */
-  .c-layout { display: grid; grid-template-columns: 272px 1fr; gap: 22px; align-items: start; }
-  @media (max-width: 1024px) {
+  .c-layout {
+    display: grid;
+    grid-template-columns: 310px 1fr;
+    gap: 22px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
     .c-layout { grid-template-columns: 1fr; }
   }
 
-  .c-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .c-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
   @media (max-width: 768px) {
     .c-stat-grid { grid-template-columns: repeat(2, 1fr); }
   }
@@ -248,6 +274,13 @@ const STYLES = `
   }
   .c-page-btn:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); }
   .c-page-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* Root adjustments */
+  .claims-root {
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  * { box-sizing: border-box; }
 
   /* Status option cards in modal */
   .status-option {
@@ -310,12 +343,12 @@ export default function AdminClaims() {
 
   const [fullClaimsLedger, setFullClaimsLedger] = useState<any[]>([]);
 
-  const PAGE_SIZE_USERS = 8;
+  const PAGE_SIZE_USERS = 5;
   const [currentUsersPage, setCurrentUsersPage] = useState(1);
   const [totalUsersPages, setTotalUsersPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
 
-  const PAGE_SIZE_CLAIMS = 6;
+  const PAGE_SIZE_CLAIMS = 5;
   const [currentClaimsPage, setCurrentClaimsPage] = useState(1);
   const [totalClaimsPages, setTotalClaimsPages] = useState(1);
 
@@ -343,11 +376,12 @@ export default function AdminClaims() {
     }
   }, [globalClaimsPage, selectedUser]);
 
-  const fetchUsers = async () => {
-    setLoadingUsers(true); setErrorUsers(null);
+  const fetchUsers = async (background = false) => {
+    if (!background) setLoadingUsers(true);
+    setErrorUsers(null);
     try {
       const [userRes, claimsRes] = await Promise.all([
-        authAPI.getUsersPaginated(currentUsersPage - 1, PAGE_SIZE_USERS, debouncedSearchUser),
+        adminAPI.getFilteredUsers(currentUsersPage - 1, PAGE_SIZE_USERS, debouncedSearchUser, 'ALL', statusFilter),
         adminAPI.getAllClaims()
       ]);
       setUsers(userRes.data.content);
@@ -406,10 +440,13 @@ export default function AdminClaims() {
       // Optimistically update local state immediately to remove blinking
       setClaims(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
       setGlobalClaims(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
+      setFullClaimsLedger(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
 
       // Fetch fresh data from backend
       if (selectedUser) fetchClaims(selectedUser.id, currentClaimsPage);
       else fetchGlobalClaims(globalClaimsPage);
+      
+      fetchUsers(true); // Background sync to ensure accurate ledger
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to review claim');
     } finally { setSubmitting(false); }
@@ -607,12 +644,34 @@ export default function AdminClaims() {
                     {(userClaimsStats[String(u.id)]?.hasSubmitted || userClaimsStats[String(u.id)]?.hasReviewing) && (
                       <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
                         {userClaimsStats[String(u.id)]?.hasSubmitted ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fee2e2', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                            <div className="pulse-dot-submitted" style={{ position: 'relative', top: 0, right: 0 }} /> Submitted
+                          <span className="blink-text" style={{ 
+                            display: 'flex', alignItems: 'center', gap: 6, 
+                            background: 'rgba(239, 68, 68, 0.15)', 
+                            color: '#ef4444', 
+                            padding: '4px 10px', 
+                            borderRadius: 6, 
+                            fontSize: 10, 
+                            fontWeight: 800, 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '.08em',
+                            border: '1px solid rgba(239, 68, 68, 0.3)'
+                          }}>
+                            <div className="pulse-dot-submitted" /> SUBMITTED
                           </span>
                         ) : userClaimsStats[String(u.id)]?.hasReviewing ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                            <div className="dot-reviewing" style={{ position: 'relative', top: 0, right: 0 }} /> Reviewing
+                          <span style={{ 
+                            display: 'flex', alignItems: 'center', gap: 6, 
+                            background: 'rgba(245, 158, 11, 0.15)', 
+                            color: '#fbbf24', 
+                            padding: '4px 10px', 
+                            borderRadius: 6, 
+                            fontSize: 10, 
+                            fontWeight: 800, 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '.08em',
+                            border: '1px solid rgba(245, 158, 11, 0.3)'
+                          }}>
+                            <div className="dot-reviewing" /> REVIEWING
                           </span>
                         ) : null}
                       </div>
@@ -723,6 +782,26 @@ export default function AdminClaims() {
                         </tbody>
                       </table>
                     </div>
+                    {/* Global Claims Pagination */}
+                    {totalGlobalClaimsPages > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 15, padding: '16px 22px', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg, #f8fafc)' }}>
+                        <button 
+                          className="c-page-btn"
+                          disabled={globalClaimsPage === 1}
+                          onClick={() => setGlobalClaimsPage(p => Math.max(1, p - 1))}
+                        >
+                          ← Prev
+                        </button>
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', opacity: .7, fontWeight: 700 }}>{globalClaimsPage} / {totalGlobalClaimsPages}</span>
+                        <button 
+                          className="c-page-btn"
+                          disabled={globalClaimsPage === totalGlobalClaimsPages}
+                          onClick={() => setGlobalClaimsPage(p => Math.min(totalGlobalClaimsPages, p + 1))}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
                 </div>
               </div>
             ) : (

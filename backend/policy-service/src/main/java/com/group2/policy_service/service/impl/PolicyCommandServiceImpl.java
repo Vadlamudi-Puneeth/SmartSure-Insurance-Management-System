@@ -98,7 +98,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
                 asyncNotificationService.sendPurchaseNotification(user.getEmail(), user.getName(), policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate());
             }
         } catch (Exception e) {
-            log.warn("Could not fetch user for notification: {}", e.getMessage());
+            log.warn("Could not fetch user for purchase notification: {}", e.getMessage());
         }
 
         return mapper.mapToUserPolicyResponse(userPolicy);

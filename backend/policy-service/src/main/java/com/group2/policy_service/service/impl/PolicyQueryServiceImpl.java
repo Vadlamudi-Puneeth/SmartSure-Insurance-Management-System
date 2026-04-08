@@ -60,6 +60,33 @@ public class PolicyQueryServiceImpl implements IPolicyQueryService {
         );
     }
 
+    @Override
+    public PageResponseDTO<UserPolicyResponseDTO> getPoliciesByUserIdPaginated(Long userId, String status, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<com.group2.policy_service.entity.UserPolicy> policyPage;
+
+        if (status != null && !status.isEmpty() && !status.equalsIgnoreCase("ALL")) {
+            com.group2.policy_service.entity.PolicyStatus policyStatus = com.group2.policy_service.entity.PolicyStatus.valueOf(status.toUpperCase());
+            policyPage = userPolicyRepository.findByUserIdAndStatus(userId, policyStatus, pageable);
+        } else {
+            policyPage = userPolicyRepository.findByUserId(userId, pageable);
+        }
+
+        List<UserPolicyResponseDTO> content = policyPage.getContent()
+                .stream()
+                .map(mapper::mapToUserPolicyResponse)
+                .collect(Collectors.toList());
+
+        return new PageResponseDTO<>(
+                content,
+                policyPage.getNumber(),
+                policyPage.getSize(),
+                policyPage.getTotalElements(),
+                policyPage.getTotalPages(),
+                policyPage.isLast()
+        );
+    }
+
     @Cacheable(value = "user_policies", key = "#userId")
     public List<UserPolicyResponseDTO> getPoliciesByUserId(Long userId) {
         return userPolicyRepository.findByUserId(userId)

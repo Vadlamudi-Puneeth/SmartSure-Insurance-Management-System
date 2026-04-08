@@ -228,15 +228,8 @@ public class AdminServiceImpl implements IAdminService {
             allUsers = allUsers.stream().filter(u -> matchingUserIds.contains(u.getId())).toList();
         }
 
-        // 4. Manual Pagination
-        int totalElements = allUsers.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int start = Math.min(page * size, totalElements);
-        int end = Math.min(start + size, totalElements);
-        List<UserDTO> pageContent = allUsers.subList(start, end);
-
-        // 5. Enrich only the paginated 5 elements!
-        pageContent.forEach(user -> {
+        // 4. Enrich ALL filtered users before sorting & pagination
+        allUsers.forEach(user -> {
             List<UserPolicyDTO> uPolicies = finalPolicies.stream().filter(p -> p.getUserId().equals(user.getId())).toList();
             user.setPolicyCount(uPolicies.size());
             user.setHasPendingPolicy(uPolicies.stream().anyMatch(p -> "PENDING_CANCELLATION".equalsIgnoreCase(p.getStatus())));
@@ -246,6 +239,31 @@ public class AdminServiceImpl implements IAdminService {
             user.setHasSubmittedClaim(uClaims.stream().anyMatch(c -> "SUBMITTED".equalsIgnoreCase(c.getStatus())));
             user.setHasReviewingClaim(uClaims.stream().anyMatch(c -> "UNDER_REVIEW".equalsIgnoreCase(c.getStatus())));
         });
+
+        // 5. SORT: Prioritize users with "Pending Cancellation" or "Submitted Claim"
+        allUsers = new java.util.ArrayList<>(allUsers);
+        allUsers.sort((u1, u2) -> {
+            // First Priority: Any pending task (Policy Cancellation OR Claim Submission)
+            boolean p1 = (u1.getHasPendingPolicy() != null && u1.getHasPendingPolicy()) || (u1.getHasSubmittedClaim() != null && u1.getHasSubmittedClaim());
+            boolean p2 = (u2.getHasPendingPolicy() != null && u2.getHasPendingPolicy()) || (u2.getHasSubmittedClaim() != null && u2.getHasSubmittedClaim());
+            if (p1 && !p2) return -1;
+            if (!p1 && p2) return 1;
+            
+            // Second Priority: Under Review Claims
+            boolean r1 = (u1.getHasReviewingClaim() != null && u1.getHasReviewingClaim());
+            boolean r2 = (u2.getHasReviewingClaim() != null && u2.getHasReviewingClaim());
+            if (r1 && !r2) return -1;
+            if (!r1 && r2) return 1;
+            
+            return 0; // Maintain original order
+        });
+
+        // 6. Manual Pagination
+        int totalElements = allUsers.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int start = Math.min(page * size, totalElements);
+        int end = Math.min(start + size, totalElements);
+        List<UserDTO> pageContent = allUsers.subList(start, end);
 
         java.util.Map<String, Object> response = new java.util.HashMap<>();
         response.put("content", pageContent);

@@ -58,6 +58,9 @@ public class PolicyCommandServiceTest {
     @Mock
     private RabbitTemplate rabbitTemplate;
 
+    @Mock
+    private com.group2.policy_service.service.impl.AsyncNotificationService asyncNotificationService;
+
     @InjectMocks
     private PolicyCommandServiceImpl policyCommandService;
 
@@ -95,6 +98,12 @@ public class PolicyCommandServiceTest {
         when(policyRepository.findById(10L)).thenReturn(Optional.of(mockPolicy));
         when(userPolicyRepository.save(any(UserPolicy.class))).thenReturn(mockUserPolicy);
         when(mapper.mapToUserPolicyResponse(any(UserPolicy.class))).thenReturn(new UserPolicyResponseDTO());
+        
+        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
+        mockUser.setId(100L);
+        mockUser.setName("Test User");
+        mockUser.setEmail("test@test.com");
+        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
 
         UserPolicyResponseDTO response = policyCommandService.purchasePolicy(10L);
 
@@ -163,6 +172,12 @@ public class PolicyCommandServiceTest {
         when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any(UserPolicy.class))).thenReturn(new UserPolicyResponseDTO());
 
+        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
+        mockUser.setId(100L);
+        mockUser.setName("Test User");
+        mockUser.setEmail("test@test.com");
+        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
+
         UserPolicyResponseDTO response = policyCommandService.requestCancellation(5L, "Reason");
 
         assertNotNull(response);
@@ -178,6 +193,12 @@ public class PolicyCommandServiceTest {
         when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
 
+        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
+        mockUser.setId(100L);
+        mockUser.setName("Test User");
+        mockUser.setEmail("test@test.com");
+        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
+
         UserPolicyResponseDTO response = policyCommandService.approveCancellation(5L);
 
         assertNotNull(response);
@@ -190,6 +211,12 @@ public class PolicyCommandServiceTest {
         mockUserPolicy.setOutstandingBalance(500.0);
         when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
+
+        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
+        mockUser.setId(100L);
+        mockUser.setName("Test User");
+        mockUser.setEmail("test@test.com");
+        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
 
         UserPolicyResponseDTO response = policyCommandService.payPremium(5L, 200.0);
 

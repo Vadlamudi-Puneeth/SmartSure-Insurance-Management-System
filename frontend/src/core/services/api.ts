@@ -7,15 +7,7 @@ const API = axios.create({
   timeout: 30000,
 });
 
-const AUTH_FREE_API = axios.create({
-  baseURL: BASE_URL,
-});
-
-const INTERNAL_AUTH = axios.create({
-  baseURL: BASE_URL,
-});
-
-// Step A: Attach token
+// Interceptor to attach token to every request if available
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -27,7 +19,7 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Step B: Internal recovery
+// Variables for token refresh queue management
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: any) => void }> = [];
 
@@ -42,19 +34,35 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
+const forceLogout = () => {
+  localStorage.clear();
+  window.location.href = '/login';
+};
+
+// Interceptor to handle token expiration (401 errors)
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status !== 401 || !originalRequest) {
-      return Promise.reject(error);
-    }
-    if (originalRequest._retry) {
-      return Promise.reject(error);
-    }
-    originalRequest._retry = true;
 
+    // Only attempt refresh if:
+    // 1. Status is 401
+    // 2. Request exists
+    // 3. We haven't already retried this specific request
+    // 4. This is NOT a refresh token request or a login request itself
+    if (
+      error.response?.status !== 401 ||
+      !originalRequest ||
+      originalRequest._retry ||
+      originalRequest.url?.includes('refresh-token') ||
+      originalRequest.url?.includes('login')
+    ) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
     const refreshToken = localStorage.getItem('refreshToken');
+
     if (!refreshToken) {
       forceLogout();
       return Promise.reject(error);
@@ -71,51 +79,42 @@ API.interceptors.response.use(
 
     isRefreshing = true;
 
-    return new Promise(async (resolve, reject) => {
-      try {
-        const response = await INTERNAL_AUTH.post(
-          `/auth-service/api/auth/refresh-token?refreshToken=${refreshToken}`
-        );
+    try {
+      // Use a basic axios call to refresh token to avoid the API interceptor logic loop
+      const response = await axios.post(`${BASE_URL}/auth-service/api/auth/refresh-token?refreshToken=${refreshToken}`);
 
-        const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
-        if (!newAccessToken) throw new Error('No token returned');
+      const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
+      if (!newAccessToken) throw new Error('Refresh failed');
 
-        localStorage.setItem('token', newAccessToken);
-        if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken);
+      localStorage.setItem('token', newAccessToken);
+      if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken);
 
-        processQueue(null, newAccessToken);
-
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        resolve(API(originalRequest));
-      } catch (refreshError: any) {
-        processQueue(refreshError, null);
-        forceLogout();
-        reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
-    });
+      processQueue(null, newAccessToken);
+      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      return API(originalRequest);
+    } catch (refreshError: any) {
+      processQueue(refreshError, null);
+      forceLogout();
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 
-const forceLogout = () => {
-  localStorage.clear();
-  window.location.href = '/login';
-};
-
 export const authAPI = {
-  login: (data: any) => AUTH_FREE_API.post('/auth-service/api/auth/login', data),
-  register: (data: any) => AUTH_FREE_API.post('/auth-service/api/auth/register', data),
-  refreshToken: (token: string) => AUTH_FREE_API.post(`/auth-service/api/auth/refresh-token?refreshToken=${token}`),
-  sendOtp: (email: string) => AUTH_FREE_API.post(`/auth-service/api/auth/send-otp?email=${email}`),
-  verifyOtp: (email: string, otp: string) => AUTH_FREE_API.post(`/auth-service/api/auth/verify-otp?email=${email}&otp=${otp}`),
-  forgotPasswordSendOtp: (email: string) => AUTH_FREE_API.post(`/auth-service/api/auth/forgot-password/send-otp?email=${email}`),
-  forgotPasswordVerifyOtp: (email: string, otp: string) => AUTH_FREE_API.post(`/auth-service/api/auth/forgot-password/verify-otp?email=${email}&otp=${otp}`),
-  resetPassword: (data: any) => AUTH_FREE_API.post('/auth-service/api/auth/reset-password', data),
+  login: (data: any) => API.post('/auth-service/api/auth/login', data),
+  register: (data: any) => API.post('/auth-service/api/auth/register', data),
+  refreshToken: (token: string) => API.post(`/auth-service/api/auth/refresh-token?refreshToken=${token}`),
+  sendOtp: (email: string) => API.post(`/auth-service/api/auth/send-otp?email=${email}`),
+  verifyOtp: (email: string, otp: string) => API.post(`/auth-service/api/auth/verify-otp?email=${email}&otp=${otp}`),
+  forgotPasswordSendOtp: (email: string) => API.post(`/auth-service/api/auth/forgot-password/send-otp?email=${email}`),
+  forgotPasswordVerifyOtp: (email: string, otp: string) => API.post(`/auth-service/api/auth/forgot-password/verify-otp?email=${email}&otp=${otp}`),
+  resetPassword: (data: any) => API.post('/auth-service/api/auth/reset-password', data),
   updateProfile: (data: any) => API.put('/auth-service/api/auth/profile', data),
   getProfile: () => API.get('/auth-service/api/auth/profile'),
   getUserById: (id: string | number, config?: any) => API.get(`/auth-service/api/auth/users/${id}`, config),
-  getUsersPaginated: (page: number, size: number, query: string) => 
+  getUsersPaginated: (page: number, size: number, query: string) =>
     API.get(`/auth-service/api/auth/users/paginated?page=${page}&size=${size}&query=${query}`),
 };
 
@@ -125,9 +124,11 @@ export const policyAPI = {
   getPolicyTypes: () => API.get('/policy-service/api/policy-types'),
   purchasePolicy: (policyId: string | number) => API.post(`/policy-service/api/policies/purchase?policyId=${policyId}`),
   getUserPolicies: (userId: string | number) => API.get(`/policy-service/api/policies/user/${userId}`),
+  getUserPoliciesPaginated: (userId: string | number, status: string, page: number, size: number) => 
+    API.get(`/policy-service/api/policies/user/${userId}/paginated?status=${status}&page=${page}&size=${size}`),
   requestCancellation: (id: string | number, reason: string) => API.put(`/policy-service/api/policies/user-policies/${id}/request-cancellation`, { reason }),
   payPremium: (id: string | number, amount: number) => API.put(`/policy-service/api/policies/user-policies/${id}/pay-premium?amount=${amount}`, {}),
-  searchPolicies: (category: string, query: string, page: number, size: number) => 
+  searchPolicies: (category: string, query: string, page: number, size: number) =>
     API.get(`/policy-service/api/policies/search?category=${category}&query=${query}&page=${page}&size=${size}`),
 };
 
@@ -144,7 +145,7 @@ export const claimsAPI = {
   getClaimStatus: (claimId: string | number) => API.get(`/claims-service/api/claims/status/${claimId}`),
   getClaimById: (claimId: string | number) => API.get(`/claims-service/api/claims/${claimId}`),
   getClaimsByUser: (userId: string | number) => API.get(`/claims-service/api/claims/user/${userId}`),
-  getClaimsByUserPaginated: (userId: string | number, page: number, size: number, query: string) => 
+  getClaimsByUserPaginated: (userId: string | number, page: number, size: number, query: string) =>
     API.get(`/claims-service/api/claims/user/${userId}/paginated?page=${page}&size=${size}&query=${query}`),
   downloadDocument: (claimId: string | number) => API.get(`/claims-service/api/claims/${claimId}/document`, { responseType: 'blob' }),
 };
@@ -165,13 +166,13 @@ export const adminAPI = {
     if (claimStatus && claimStatus !== 'ALL') url += `&claimStatus=${claimStatus}`;
     return API.get(url);
   },
-  getPaginatedUserPolicies: (userId: string | number, page: number, size: number) => 
+  getPaginatedUserPolicies: (userId: string | number, page: number, size: number) =>
     API.get(`/policy-service/api/policies/user/${userId}?page=${page}&size=${size}`),
   getAllUserPolicies: () => API.get('/policy-service/api/admin/user-policies'),
   approveCancellation: (id: string | number) => API.put(`/policy-service/api/admin/policies/user-policies/${id}/approve-cancellation`),
   getUserPolicies: (userId: string | number) => API.get(`/policy-service/api/policies/user/${userId}`),
   getAllClaims: () => API.get('/admin-service/api/admin/claims'),
-  getAllClaimsPaginated: (page: number, size: number, query: string) => 
+  getAllClaimsPaginated: (page: number, size: number, query: string) =>
     API.get(`/claims-service/api/claims/paginated?page=${page}&size=${size}&query=${query}`),
 };
 
@@ -181,3 +182,4 @@ export const paymentAPI = {
 };
 
 export default API;
+

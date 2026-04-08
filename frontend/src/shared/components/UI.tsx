@@ -83,26 +83,26 @@ export function StatCard({ icon: Icon, label, value, color, trend }: any) {
 }
 
 export function Badge({ status }: { status?: string }) {
-  const colors: Record<string, { bg: string, text: string }> = {
-    ACTIVE: { bg: '#10b98120', text: '#10b981' },
-    CREATED: { bg: '#6366f120', text: '#6366f1' },
-    EXPIRED: { bg: '#64748b20', text: '#64748b' },
-    CANCELLED: { bg: '#ef444420', text: '#ef4444' },
-    SUBMITTED: { bg: '#f59e0b20', text: '#f59e0b' },
-    UNDER_REVIEW: { bg: '#6366f120', text: '#6366f1' },
-    APPROVED: { bg: '#10b98120', text: '#10b981' },
-    REJECTED: { bg: '#ef444420', text: '#ef4444' },
-    CLOSED: { bg: '#64748b20', text: '#64748b' },
-    DRAFT: { bg: '#94a3b820', text: '#94a3b8' },
-    PENDING: { bg: '#f59e0b20', text: '#f59e0b' },
-    SUCCESS: { bg: '#10b98120', text: '#10b981' },
-    FAILED: { bg: '#ef444420', text: '#ef4444' },
-    PENDING_CANCELLATION: { bg: '#f59e0b20', text: '#f59e0b' },
+  const colors: Record<string, { bg: string, text: string, border: string }> = {
+    ACTIVE: { bg: '#10b98115', text: '#059669', border: '#10b98140' },
+    CREATED: { bg: '#6366f115', text: '#4f46e5', border: '#6366f140' },
+    EXPIRED: { bg: '#64748b15', text: '#475569', border: '#64748b40' },
+    CANCELLED: { bg: '#ef444415', text: '#dc2626', border: '#ef444440' },
+    SUBMITTED: { bg: '#f59e0b15', text: '#d97706', border: '#f59e0b40' },
+    UNDER_REVIEW: { bg: '#6366f115', text: '#4f46e5', border: '#6366f140' },
+    APPROVED: { bg: '#10b98115', text: '#059669', border: '#10b98140' },
+    REJECTED: { bg: '#ef444415', text: '#dc2626', border: '#ef444440' },
+    CLOSED: { bg: '#64748b15', text: '#475569', border: '#64748b40' },
+    DRAFT: { bg: '#94a3b815', text: '#64748b', border: '#94a3b840' },
+    PENDING: { bg: '#f59e0b15', text: '#d97706', border: '#f59e0b40' },
+    SUCCESS: { bg: '#10b98115', text: '#059669', border: '#10b98140' },
+    FAILED: { bg: '#ef444415', text: '#dc2626', border: '#ef444440' },
+    PENDING_CANCELLATION: { bg: '#f59e0b15', text: '#d97706', border: '#f59e0b40' },
   };
-  const c = colors[status as string] || { bg: '#64748b20', text: '#64748b' };
+  const c = colors[status as string] || { bg: '#64748b15', text: '#475569', border: '#64748b40' };
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
-      style={{ backgroundColor: c.bg, color: c.text }}>
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-[13px] font-bold border"
+      style={{ backgroundColor: c.bg, color: c.text, borderColor: c.border }}>
       {status?.replace(/_/g, ' ') || 'UNKNOWN'}
     </span>
   );
