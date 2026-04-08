@@ -39,13 +39,13 @@ export default function Login() {
     try {
       const res = await authAPI.login(data);
       const { token, refreshToken, role, id } = res.data;
-      
-      const userRes = await authAPI.getUserById(id, { 
-        headers: { Authorization: `Bearer ${token}` } 
+
+      const userRes = await authAPI.getUserById(id, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       const fullUser = { ...userRes.data, token };
-      
+
       localStorage.setItem('user', JSON.stringify(fullUser));
       localStorage.setItem('token', token);
       if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
@@ -109,16 +109,16 @@ export default function Login() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <HiMail className="w-5 h-5" style={{ color: 'var(--color-text-secondary)' }} />
                 </div>
-                  <input
-                    id="login-email"
-                    type="email"
-                    {...register('email')}
-                    onChange={(e) => {
-                      register('email').onChange(e);
-                      sessionStorage.setItem('rememberedEmail', e.target.value);
-                    }}
-                    placeholder="you@example.com"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all focus:ring-2"
+                <input
+                  id="login-email"
+                  type="email"
+                  {...register('email')}
+                  onChange={(e) => {
+                    register('email').onChange(e);
+                    sessionStorage.setItem('rememberedEmail', e.target.value);
+                  }}
+                  placeholder="you@example.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all focus:ring-2"
                   style={{
                     backgroundColor: 'var(--color-bg)',
                     border: '1px solid var(--color-border)',
@@ -192,15 +192,17 @@ export default function Login() {
               Create account
             </Link>
           </p>
-
+          {/*  
           <div className="mt-6 p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <p className="font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Demo Credentials</p>
             <p style={{ color: 'var(--color-text-secondary)' }}>
               Admin: admin@capgemini.com / admin123
             </p>
-          </div>
+          </div> */}
+
         </div>
       </div>
     </div>
   );
 }
+

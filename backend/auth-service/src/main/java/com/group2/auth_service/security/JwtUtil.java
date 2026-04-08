@@ -20,7 +20,7 @@ public class JwtUtil {
 	 @Value("${jwt.secret}")
 	 private String secret;
 
-	 private static final long ACCESS_TOKEN_EXPIRATION = 1000L * 60 * 1; // 15 minutes
+	 private static final long ACCESS_TOKEN_EXPIRATION = 1000L * 60 * 15; // 15 minutes
 	 private static final long REFRESH_TOKEN_EXPIRATION = 1000L * 60 * 60 * 24 * 7; // 7 days
 
 	 public String generateToken(String email, Long userId, String role) {
