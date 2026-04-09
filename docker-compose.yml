@@ -253,8 +253,7 @@ services:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
+    # Internal only
     networks:
       - private-network
 
@@ -263,8 +262,7 @@ services:
     container_name: logstash
     volumes:
       - ./docker/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-    ports:
-      - "5044:5044"
+    # Internal only
     depends_on:
       - elasticsearch
     networks:

@@ -192,13 +192,7 @@ export default function Login() {
               Create account
             </Link>
           </p>
-          {/*  
-          <div className="mt-6 p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <p className="font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Demo Credentials</p>
-            <p style={{ color: 'var(--color-text-secondary)' }}>
-              Admin: admin@capgemini.com / admin123
-            </p>
-          </div> */}
+
 
         </div>
       </div>

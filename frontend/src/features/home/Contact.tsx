@@ -8,18 +8,35 @@ export default function Contact() {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.message) {
       toast.error('Please fill in all fields');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const response = await fetch("https://formspree.io/f/mlgovogg", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        toast.success('Your message has been sent successfully!');
+        setFormData({ name: '', email: '', message: '' });
+      } else {
+        toast.error('There was an error sending your message. Please try again.');
+      }
+    } catch (error) {
+      toast.error('Network error. Please check your connection.');
+    } finally {
       setLoading(false);
-      toast.success('Your message has been sent successfully!');
-      setFormData({ name: '', email: '', message: '' });
-    }, 1500);
+    }
   };
 
   const faqs = [
@@ -47,7 +64,7 @@ export default function Contact() {
               <div className="grid sm:grid-cols-2 gap-8">
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-primary)' }}><HiMail className="w-6 h-6" /></div>
-                  <div><h3 className="font-semibold">Email</h3><p className="text-sm opacity-70 italic">support@smartsure.com</p></div>
+                  <div><h3 className="font-semibold">Email</h3><p className="text-sm opacity-70 italic">bussasathvik@gmail.com</p></div>
                 </div>
                 <div className="flex items-start gap-4">
                   <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-accent)' }}><HiPhone className="w-6 h-6" /></div>
@@ -77,16 +94,16 @@ export default function Contact() {
             <div className="grid sm:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider opacity-60 ml-1">Name</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-5 py-4 rounded-2xl text-sm outline-none border focus:border-primary transition-all" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="John Doe" />
+                <input type="text" name="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-5 py-4 rounded-2xl text-sm outline-none border focus:border-primary transition-all" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="John Doe" required />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider opacity-60 ml-1">Email</label>
-                <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-5 py-4 rounded-2xl text-sm outline-none border focus:border-primary transition-all" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="john@example.com" />
+                <input type="email" name="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-5 py-4 rounded-2xl text-sm outline-none border focus:border-primary transition-all" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="john@example.com" required />
               </div>
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider opacity-60 ml-1">Message</label>
-              <textarea rows={5} value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} className="w-full px-5 py-4 rounded-2xl text-sm outline-none border focus:border-primary transition-all resize-none" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="How can we help you?" />
+              <textarea name="message" rows={5} value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} className="w-full px-5 py-4 rounded-2xl text-sm outline-none border focus:border-primary transition-all resize-none" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="How can we help you?" required />
             </div>
             <button type="submit" disabled={loading} className="w-full py-4 rounded-2xl text-sm font-bold text-white transition-all transform hover:-translate-y-1 hover:shadow-lg disabled:opacity-50 shadow-md" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))' }}>
               {loading ? 'Sending Request...' : 'Submit Inquiry'}
