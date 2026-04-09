@@ -19,7 +19,9 @@ public class CorsConfig {
             "http://localhost:5173", 
             "http://20.40.46.104:3000",
             "http://smartsureinsurance.work.gd",
-            "https://smartsureinsurance.work.gd"
+            "https://smartsureinsurance.work.gd",
+            "http://smartsureinsurance.work.gd.",
+            "https://smartsureinsurance.work.gd."
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));

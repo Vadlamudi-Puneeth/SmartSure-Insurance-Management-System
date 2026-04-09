@@ -80,7 +80,7 @@ axiosInstance.interceptors.response.use(
 
     try {
       // Use clean axios to avoid interceptor loop
-      const response = await axios.post(`${BASE_URL}/auth-service/api/auth/refresh-token?refreshToken=${refreshToken}`);
+      const response = await axios.post(`${BASE_URL}auth-service/api/auth/refresh-token?refreshToken=${refreshToken}`);
       
       const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
       if (!newAccessToken) throw new Error('Refresh failed');
