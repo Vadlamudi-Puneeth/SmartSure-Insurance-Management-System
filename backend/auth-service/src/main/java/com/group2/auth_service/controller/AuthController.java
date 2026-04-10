@@ -2,7 +2,10 @@ package com.group2.auth_service.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 import com.group2.auth_service.dto.AuthResponse;
 import com.group2.auth_service.dto.LoginRequest;
@@ -34,8 +39,10 @@ public class AuthController {
 	}
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(service.login(request));
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+        AuthResponse authResponse = service.login(request);
+        setRefreshTokenCookie(response, authResponse.getRefreshToken());
+        return ResponseEntity.ok(authResponse);
     }
     
     @PostMapping("/register")
@@ -102,7 +109,30 @@ public class AuthController {
     }
 
     @PostMapping("/refresh-token")
-    public ResponseEntity<AuthResponse> refreshToken(@RequestParam String refreshToken) {
-        return ResponseEntity.ok(service.refreshToken(refreshToken));
+    public ResponseEntity<AuthResponse> refreshToken(
+            @RequestParam(required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            HttpServletResponse response) {
+        
+        String tokenToUse = refreshToken != null ? refreshToken : cookieRefreshToken;
+        
+        if (tokenToUse == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        AuthResponse authResponse = service.refreshToken(tokenToUse);
+        setRefreshTokenCookie(response, authResponse.getRefreshToken());
+        return ResponseEntity.ok(authResponse);
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(false) // Set to true in production if using HTTPS
+                .path("/")
+                .maxAge(7 * 24 * 60 * 60) // 7 days
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 }
