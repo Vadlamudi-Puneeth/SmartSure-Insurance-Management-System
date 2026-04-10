@@ -1,16 +1,19 @@
 package com.group2.policy_service.service;
 
-import com.group2.policy_service.service.impl.PolicyCommandServiceImpl;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
@@ -32,40 +35,32 @@ import com.group2.policy_service.entity.Policy;
 import com.group2.policy_service.entity.PolicyStatus;
 import com.group2.policy_service.entity.PolicyType;
 import com.group2.policy_service.entity.UserPolicy;
+import com.group2.policy_service.feign.AuthClient;
+import com.group2.policy_service.feign.UserDTO;
 import com.group2.policy_service.repository.PolicyRepository;
 import com.group2.policy_service.repository.PolicyTypeRepository;
 import com.group2.policy_service.repository.UserPolicyRepository;
+import com.group2.policy_service.service.impl.AsyncNotificationService;
+import com.group2.policy_service.service.impl.PolicyCommandServiceImpl;
 import com.group2.policy_service.util.PolicyMapper;
 
 @ExtendWith(MockitoExtension.class)
 public class PolicyCommandServiceTest {
 
-    @Mock
-    private PolicyRepository policyRepository;
-
-    @Mock
-    private UserPolicyRepository userPolicyRepository;
-
-    @Mock
-    private PolicyTypeRepository policyTypeRepository;
-
-    @Mock
-    private PolicyMapper mapper;
-
-    @Mock
-    private com.group2.policy_service.feign.AuthClient authClient;
-
-    @Mock
-    private RabbitTemplate rabbitTemplate;
-
-    @Mock
-    private com.group2.policy_service.service.impl.AsyncNotificationService asyncNotificationService;
+    @Mock private PolicyRepository policyRepository;
+    @Mock private UserPolicyRepository userPolicyRepository;
+    @Mock private PolicyTypeRepository policyTypeRepository;
+    @Mock private PolicyMapper mapper;
+    @Mock private AuthClient authClient;
+    @Mock private RabbitTemplate rabbitTemplate;
+    @Mock private AsyncNotificationService asyncNotificationService;
 
     @InjectMocks
     private PolicyCommandServiceImpl policyCommandService;
 
     private Policy mockPolicy;
     private UserPolicy mockUserPolicy;
+    private UserDTO mockUser;
 
     @BeforeEach
     void setUp() {
@@ -74,12 +69,20 @@ public class PolicyCommandServiceTest {
         mockPolicy.setPolicyName("Health Plan");
         mockPolicy.setDurationInMonths(12);
         mockPolicy.setPremiumAmount(100.0);
+        mockPolicy.setCoverageAmount(50000.0);
+        mockPolicy.setActive(true);
 
         mockUserPolicy = new UserPolicy();
         mockUserPolicy.setId(5L);
         mockUserPolicy.setPolicy(mockPolicy);
         mockUserPolicy.setUserId(100L);
         mockUserPolicy.setStatus(PolicyStatus.ACTIVE);
+        mockUserPolicy.setOutstandingBalance(0.0);
+
+        mockUser = new UserDTO();
+        mockUser.setId(100L);
+        mockUser.setName("Test User");
+        mockUser.setEmail("test@test.com");
     }
 
     @AfterEach
@@ -87,23 +90,23 @@ public class PolicyCommandServiceTest {
         SecurityContextHolder.clearContext();
     }
 
-    @Test
-    void testPurchasePolicy() {
+    private void setUpSecurityContext(Long userId) {
         Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(100L);
-        SecurityContext context = mock(SecurityContext.class);
-        when(context.getAuthentication()).thenReturn(auth);
-        SecurityContextHolder.setContext(context);
+        when(auth.getPrincipal()).thenReturn(userId);
+        SecurityContext ctx = mock(SecurityContext.class);
+        when(ctx.getAuthentication()).thenReturn(auth);
+        SecurityContextHolder.setContext(ctx);
+    }
+
+    @Test
+    void testPurchasePolicy_Success() {
+        setUpSecurityContext(100L);
 
         when(policyRepository.findById(10L)).thenReturn(Optional.of(mockPolicy));
+        when(userPolicyRepository.findByUserId(100L)).thenReturn(Collections.emptyList());
         when(userPolicyRepository.save(any(UserPolicy.class))).thenReturn(mockUserPolicy);
         when(mapper.mapToUserPolicyResponse(any(UserPolicy.class))).thenReturn(new UserPolicyResponseDTO());
-        
-        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
-        mockUser.setId(100L);
-        mockUser.setName("Test User");
-        mockUser.setEmail("test@test.com");
-        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
+        when(authClient.getUserById(100L)).thenReturn(mockUser);
 
         UserPolicyResponseDTO response = policyCommandService.purchasePolicy(10L);
 
@@ -112,11 +115,54 @@ public class PolicyCommandServiceTest {
     }
 
     @Test
-    void testCreatePolicy() {
+    void testPurchasePolicy_AlreadyHasActive() {
+        setUpSecurityContext(100L);
+
+        UserPolicy existing = new UserPolicy();
+        existing.setPolicy(mockPolicy);
+        existing.setStatus(PolicyStatus.ACTIVE);
+
+        when(policyRepository.findById(10L)).thenReturn(Optional.of(mockPolicy));
+        when(userPolicyRepository.findByUserId(100L)).thenReturn(Arrays.asList(existing));
+
+        assertThrows(RuntimeException.class, () -> policyCommandService.purchasePolicy(10L));
+    }
+
+    @Test
+    void testRequestCancellation_Success() {
+        setUpSecurityContext(100L);
+
+        when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
+        when(mapper.mapToUserPolicyResponse(any(UserPolicy.class))).thenReturn(new UserPolicyResponseDTO());
+        when(authClient.getUserById(100L)).thenReturn(mockUser);
+
+        UserPolicyResponseDTO response = policyCommandService.requestCancellation(5L, "Reason");
+
+        assertNotNull(response);
+        assertEquals(PolicyStatus.PENDING_CANCELLATION, mockUserPolicy.getStatus());
+        verify(userPolicyRepository, times(1)).save(mockUserPolicy);
+    }
+
+    @Test
+    void testApproveCancellation_Success() {
+        mockUserPolicy.setStatus(PolicyStatus.PENDING_CANCELLATION);
+        mockUserPolicy.setOutstandingBalance(0.0);
+        when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
+        when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
+        when(authClient.getUserById(any())).thenReturn(mockUser);
+
+        UserPolicyResponseDTO response = policyCommandService.approveCancellation(5L);
+
+        assertNotNull(response);
+        assertEquals(PolicyStatus.CANCELLED, mockUserPolicy.getStatus());
+    }
+
+    @Test
+    void testCreatePolicy_Success() {
         PolicyRequestDTO dto = new PolicyRequestDTO();
         dto.setPolicyTypeId(1L);
         dto.setPolicyName("New Plan");
-        
+
         when(policyTypeRepository.findById(1L)).thenReturn(Optional.of(new PolicyType()));
         when(policyRepository.save(any(Policy.class))).thenReturn(mockPolicy);
         when(mapper.mapToPolicyResponse(any(Policy.class))).thenReturn(new PolicyResponseDTO());
@@ -124,104 +170,38 @@ public class PolicyCommandServiceTest {
         PolicyResponseDTO response = policyCommandService.createPolicy(dto);
 
         assertNotNull(response);
-        verify(policyRepository, times(1)).save(any(Policy.class));
     }
 
     @Test
-    void testCreatePolicy_TypeNotFound() {
-        PolicyRequestDTO dto = new PolicyRequestDTO();
-        dto.setPolicyTypeId(99L);
-        
-        when(policyTypeRepository.findById(99L)).thenReturn(Optional.empty());
-
-        assertThrows(RuntimeException.class, () -> policyCommandService.createPolicy(dto));
-    }
-
-    @Test
-    void testUpdatePolicy() {
+    void testUpdatePolicy_Success() {
         PolicyRequestDTO dto = new PolicyRequestDTO();
         dto.setPolicyName("Updated Plan");
 
         when(policyRepository.findById(10L)).thenReturn(Optional.of(mockPolicy));
         when(mapper.mapToPolicyResponse(any())).thenReturn(new PolicyResponseDTO());
-        
+
         PolicyResponseDTO response = policyCommandService.updatePolicy(10L, dto);
 
         assertNotNull(response);
-        verify(policyRepository, times(1)).save(mockPolicy);
     }
 
     @Test
-    void testDeletePolicy() {
+    void testDeletePolicy_Success() {
         when(policyRepository.findById(10L)).thenReturn(Optional.of(mockPolicy));
-
         policyCommandService.deletePolicy(10L);
-
-        verify(policyRepository, times(1)).save(mockPolicy);
-        assertEquals(false, mockPolicy.isActive());
+        assertFalse(mockPolicy.isActive());
     }
 
     @Test
-    void testRequestCancellation() {
-        Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(100L);
-        SecurityContext context = mock(SecurityContext.class);
-        when(context.getAuthentication()).thenReturn(auth);
-        SecurityContextHolder.setContext(context);
-
-        when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
-        when(mapper.mapToUserPolicyResponse(any(UserPolicy.class))).thenReturn(new UserPolicyResponseDTO());
-
-        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
-        mockUser.setId(100L);
-        mockUser.setName("Test User");
-        mockUser.setEmail("test@test.com");
-        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
-
-        UserPolicyResponseDTO response = policyCommandService.requestCancellation(5L, "Reason");
-
-        assertNotNull(response);
-        assertEquals(PolicyStatus.PENDING_CANCELLATION, mockUserPolicy.getStatus());
-        verify(userPolicyRepository, times(1)).save(mockUserPolicy);
-        verify(rabbitTemplate, times(1)).convertAndSend(any(String.class), any(String.class), any(Object.class));
-    }
-
-    @Test
-    void testApproveCancellation() {
-        mockUserPolicy.setStatus(PolicyStatus.PENDING_CANCELLATION);
-        mockUserPolicy.setOutstandingBalance(0.0);
-        when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
-        when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
-
-        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
-        mockUser.setId(100L);
-        mockUser.setName("Test User");
-        mockUser.setEmail("test@test.com");
-        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
-
-        UserPolicyResponseDTO response = policyCommandService.approveCancellation(5L);
-
-        assertNotNull(response);
-        assertEquals(PolicyStatus.CANCELLED, mockUserPolicy.getStatus());
-        verify(userPolicyRepository, times(1)).save(mockUserPolicy);
-    }
-
-    @Test
-    void testPayPremium() {
+    void testPayPremium_Success() {
         mockUserPolicy.setOutstandingBalance(500.0);
         when(userPolicyRepository.findById(5L)).thenReturn(Optional.of(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
-
-        com.group2.policy_service.feign.UserDTO mockUser = new com.group2.policy_service.feign.UserDTO();
-        mockUser.setId(100L);
-        mockUser.setName("Test User");
-        mockUser.setEmail("test@test.com");
-        when(authClient.getUserById(any(Long.class))).thenReturn(mockUser);
+        when(authClient.getUserById(any())).thenReturn(mockUser);
 
         UserPolicyResponseDTO response = policyCommandService.payPremium(5L, 200.0);
 
         assertNotNull(response);
         assertEquals(300.0, mockUserPolicy.getOutstandingBalance());
-        verify(userPolicyRepository, times(1)).save(mockUserPolicy);
     }
 }

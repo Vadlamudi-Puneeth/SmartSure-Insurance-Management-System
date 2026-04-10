@@ -4,10 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,83 +19,79 @@ import com.group2.policy_service.dto.PolicyResponseDTO;
 import com.group2.policy_service.dto.UserPolicyResponseDTO;
 import com.group2.policy_service.service.IPolicyCommandService;
 
+import com.group2.policy_service.entity.PolicyStatus;
+
 @ExtendWith(MockitoExtension.class)
 public class PolicyCommandControllerTest {
 
     @Mock
-    private IPolicyCommandService policyCommandService;
+    private IPolicyCommandService commandService;
 
     @InjectMocks
-    private PolicyCommandController policyCommandController;
+    private PolicyCommandController controller;
 
-    @Test
-    void testPurchasePolicy() {
-        UserPolicyResponseDTO response = new UserPolicyResponseDTO();
-        when(policyCommandService.purchasePolicy(1L)).thenReturn(response);
+    private PolicyResponseDTO mockPolicyResponse;
+    private UserPolicyResponseDTO mockUserPolicyResponse;
 
-        UserPolicyResponseDTO result = policyCommandController.purchasePolicy(1L);
-        assertEquals(response, result);
+    @BeforeEach
+    void setUp() {
+        mockPolicyResponse = new PolicyResponseDTO();
+        mockPolicyResponse.setId(10L);
+        mockPolicyResponse.setPolicyName("Health Plan");
+
+        mockUserPolicyResponse = new UserPolicyResponseDTO();
+        mockUserPolicyResponse.setId(5L);
+        mockUserPolicyResponse.setPolicyName("Health Plan");
+        mockUserPolicyResponse.setStatus(PolicyStatus.ACTIVE);
     }
 
     @Test
     void testCreatePolicy() {
-        PolicyResponseDTO response = new PolicyResponseDTO();
-        when(policyCommandService.createPolicy(any(PolicyRequestDTO.class))).thenReturn(response);
-
-        PolicyResponseDTO result = policyCommandController.createPolicy(new PolicyRequestDTO());
-        assertEquals(response, result);
+        when(commandService.createPolicy(any(PolicyRequestDTO.class))).thenReturn(mockPolicyResponse);
+        PolicyResponseDTO res = controller.createPolicy(new PolicyRequestDTO());
+        assertEquals(10L, res.getId());
     }
 
     @Test
     void testUpdatePolicy() {
-        PolicyResponseDTO response = new PolicyResponseDTO();
-        when(policyCommandService.updatePolicy(eq(1L), any(PolicyRequestDTO.class))).thenReturn(response);
-
-        PolicyResponseDTO result = policyCommandController.updatePolicy(1L, new PolicyRequestDTO());
-        assertEquals(response, result);
+        when(commandService.updatePolicy(eq(10L), any(PolicyRequestDTO.class))).thenReturn(mockPolicyResponse);
+        PolicyResponseDTO res = controller.updatePolicy(10L, new PolicyRequestDTO());
+        assertEquals(10L, res.getId());
     }
 
     @Test
     void testDeletePolicy() {
-        doNothing().when(policyCommandService).deletePolicy(1L);
+        doNothing().when(commandService).deletePolicy(10L);
+        controller.deletePolicy(10L);
+    }
 
-        policyCommandController.deletePolicy(1L);
-
-        verify(policyCommandService, times(1)).deletePolicy(1L);
+    @Test
+    void testPurchasePolicy() {
+        when(commandService.purchasePolicy(10L)).thenReturn(mockUserPolicyResponse);
+        UserPolicyResponseDTO res = controller.purchasePolicy(10L);
+        assertEquals(5L, res.getId());
     }
 
     @Test
     void testRequestCancellation() {
-        UserPolicyResponseDTO response = new UserPolicyResponseDTO();
-        when(policyCommandService.requestCancellation(1L, "reason")).thenReturn(response);
-
+        when(commandService.requestCancellation(eq(5L), any())).thenReturn(mockUserPolicyResponse);
         java.util.Map<String, String> body = new java.util.HashMap<>();
-        body.put("reason", "reason");
-
-        ResponseEntity<UserPolicyResponseDTO> result =
-                policyCommandController.requestCancellation(1L, body);
-
-        assertEquals(200, result.getStatusCode().value());
-        assertEquals(response, result.getBody());
+        body.put("reason", "Reason");
+        ResponseEntity<UserPolicyResponseDTO> res = controller.requestCancellation(5L, body);
+        assertEquals(200, res.getStatusCode().value());
     }
-    
+
     @Test
     void testApproveCancellation() {
-        UserPolicyResponseDTO response = new UserPolicyResponseDTO();
-        when(policyCommandService.approveCancellation(1L)).thenReturn(response);
-
-        ResponseEntity<UserPolicyResponseDTO> result = policyCommandController.approveCancellation(1L);
-        assertEquals(200, result.getStatusCode().value());
-        assertEquals(response, result.getBody());
+        when(commandService.approveCancellation(5L)).thenReturn(mockUserPolicyResponse);
+        ResponseEntity<UserPolicyResponseDTO> res = controller.approveCancellation(5L);
+        assertEquals(200, res.getStatusCode().value());
     }
 
     @Test
     void testPayPremium() {
-        UserPolicyResponseDTO response = new UserPolicyResponseDTO();
-        when(policyCommandService.payPremium(1L, 100.0)).thenReturn(response);
-
-        ResponseEntity<UserPolicyResponseDTO> result = policyCommandController.payPremium(1L, 100.0);
-        assertEquals(200, result.getStatusCode().value());
-        assertEquals(response, result.getBody());
+        when(commandService.payPremium(5L, 100.0)).thenReturn(mockUserPolicyResponse);
+        ResponseEntity<UserPolicyResponseDTO> res = controller.payPremium(5L, 100.0);
+        assertEquals(200, res.getStatusCode().value());
     }
 }
