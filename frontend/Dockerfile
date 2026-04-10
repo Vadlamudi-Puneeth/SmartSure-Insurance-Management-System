@@ -14,6 +14,10 @@ RUN npm ci
 # Copy the rest of the source code
 COPY . .
 
+# Define build argument for API URL
+ARG VITE_API_BASE_URL=/
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 # Build the production bundle
 RUN npm run build
 
