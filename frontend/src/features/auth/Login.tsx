@@ -48,7 +48,7 @@ export default function Login() {
 
       localStorage.setItem('user', JSON.stringify(fullUser));
       localStorage.setItem('token', token);
-      // refreshToken is now securely stored in an HttpOnly cookie by the server
+      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
 
       dispatch(loginSuccess(fullUser));
       toast.success('Welcome back!');

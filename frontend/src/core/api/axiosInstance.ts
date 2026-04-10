@@ -5,7 +5,6 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/';
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 30000,
-  withCredentials: true, // Required so browser sends/receives HttpOnly cookies
 });
 
 let isRefreshing = false;
@@ -73,18 +72,21 @@ axiosInstance.interceptors.response.use(
     originalRequest._retry = true;
     isRefreshing = true;
 
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      forceLogout();
+      return Promise.reject(error);
+    }
+
     try {
-      // Use clean axios to avoid interceptor loop. 
-      // Refresh token is now sent automatically via HttpOnly cookie.
-      const response = await axios.post(`${BASE_URL}auth-service/api/auth/refresh-token`, null, {
-        withCredentials: true
-      });
+      // Use clean axios to avoid interceptor loop
+      const response = await axios.post(`${BASE_URL}auth-service/api/auth/refresh-token?refreshToken=${refreshToken}`);
       
-      const { token: newAccessToken } = response.data;
+      const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
       if (!newAccessToken) throw new Error('Refresh failed');
 
       localStorage.setItem('token', newAccessToken);
-      // No need to store refreshToken in localStorage anymore!
+      if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken);
 
       processQueue(null, newAccessToken);
       
