@@ -81,6 +81,10 @@ public class ClaimServiceImpl implements IClaimService {
 	
 	public String uploadDocument(Long claimId, MultipartFile file) {
 		claimRepository.findById(claimId).orElseThrow(()-> new ClaimNotFoundException("NF"));
+
+		// Enforce 1 MB limit
+		long maxSize = 1 * 1024 * 1024; // 1 MB
+		if (file.getSize() > maxSize) throw new IllegalArgumentException("File size exceeds 1 MB limit");
 		
 		String ct = file.getContentType();
 		String fn = file.getOriginalFilename();

@@ -121,8 +121,14 @@ export default function MyClaims() {
     }
   };
 
+  const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
+
   const handleUploadDoc = async () => {
     if (!file || !showUpload) { toast.error('Please select a file'); return; }
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(`File size (${(file.size / 1024 / 1024).toFixed(2)} MB) exceeds the 1 MB limit`);
+      return;
+    }
     setSubmitting(true);
     try {
       await claimsAPI.uploadDocument(showUpload, file);
@@ -488,7 +494,7 @@ export default function MyClaims() {
                   Click to browse files
                 </p>
                 <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  Maximum file size: 5MB
+                  Maximum file size: 1MB (JPG, JPEG, or PDF)
                 </p>
               </div>
             )}
@@ -500,7 +506,13 @@ export default function MyClaims() {
               className="hidden"
               onChange={(e) => {
                  if (e.target.files && e.target.files[0]) {
-                   setFile(e.target.files[0]);
+                   const selected = e.target.files[0];
+                   if (selected.size > MAX_FILE_SIZE) {
+                     toast.error(`File size (${(selected.size / 1024 / 1024).toFixed(2)} MB) exceeds the 1 MB limit. Please choose a smaller file.`);
+                     e.target.value = '';
+                     return;
+                   }
+                   setFile(selected);
                  }
               }}
             />
