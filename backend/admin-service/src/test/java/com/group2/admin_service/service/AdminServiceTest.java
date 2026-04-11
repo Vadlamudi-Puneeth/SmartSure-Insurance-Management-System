@@ -14,12 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
 import com.group2.admin_service.dto.*;
 import com.group2.admin_service.feign.*;
 import com.group2.admin_service.service.impl.AdminServiceImpl;
+import com.group2.admin_service.util.AdminMapper;
 
 @ExtendWith(MockitoExtension.class)
 public class AdminServiceTest {
@@ -28,6 +30,7 @@ public class AdminServiceTest {
     @Mock private ClaimsFeignClient claimClient;
     @Mock private PolicyFeignClient policyClient;
     @Mock private NotificationFeignClient notificationClient;
+    @Spy private AdminMapper adminMapper = new AdminMapper();
 
     @InjectMocks
     private AdminServiceImpl adminService;
@@ -120,21 +123,38 @@ public class AdminServiceTest {
 
     @Test
     void testUserAndReports() {
-        when(authClient.getAllUsers()).thenReturn(List.of(new UserDTO()));
+        UserDTO customer = new UserDTO();
+        customer.setId(1L);
+        customer.setRole("USER");
+        when(authClient.getAllUsers()).thenReturn(List.of(customer));
         assertNotNull(adminService.getAllUsers());
-        assertNotNull(adminService.getFilteredUsers(0, 5, "", null, null));
-        
-        when(claimClient.getAllClaims()).thenReturn(List.of(new ClaimDTO()));
-        ReportResponse r = adminService.getReports();
-        assertEquals(1, r.getTotalClaims());
-        
-        // Fail path (doThrow/doReturn avoid invoking a stub that still throws)
-        doThrow(new RuntimeException()).when(authClient).getAllUsers();
-        adminService.getReports();
 
-        doReturn(List.of()).when(authClient).getAllUsers();
-        when(claimClient.getAllClaims()).thenReturn(null);
-        ReportResponse noClaims = adminService.getReports();
-        assertEquals(0, noClaims.getTotalClaims());
+        when(policyClient.getAllUserPolicies()).thenReturn(List.of());
+        when(claimClient.getAllClaims()).thenReturn(List.of());
+        java.util.Map<String, Object> page = adminService.getFilteredUsers(0, 5, "", null, null);
+        assertNotNull(page.get("content"));
+        assertEquals(1L, page.get("totalElements"));
+
+        ClaimStatusDTO cs = new ClaimStatusDTO();
+        cs.setTotalClaims(3);
+        cs.setApprovedClaims(2);
+        cs.setRejectedClaims(1);
+        PolicyStatsDTO ps = new PolicyStatsDTO();
+        ps.setTotalPolicies(5L);
+        ps.setTotalRevenue(100.0);
+        when(claimClient.getClaimStats()).thenReturn(cs);
+        when(policyClient.getPolicyStats()).thenReturn(ps);
+        ReportResponse r = adminService.getReports();
+        assertEquals(3, r.getTotalClaims());
+        assertEquals(5L, r.getTotalPolicies());
+
+        doThrow(new RuntimeException()).when(claimClient).getClaimStats();
+        when(policyClient.getPolicyStats()).thenReturn(new PolicyStatsDTO());
+        assertNotNull(adminService.getReports());
+
+        doReturn(cs).when(claimClient).getClaimStats();
+        when(policyClient.getPolicyStats()).thenReturn(null);
+        ReportResponse partial = adminService.getReports();
+        assertEquals(3, partial.getTotalClaims());
     }
 }
