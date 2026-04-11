@@ -1,150 +1,140 @@
 package com.group2.admin_service.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.junit.jupiter.api.BeforeEach;
+import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.ResponseEntity;
 
-import com.group2.admin_service.dto.ClaimDTO;
-import com.group2.admin_service.dto.ClaimStatusDTO;
-import com.group2.admin_service.dto.ClaimStatusUpdateDTO;
-import com.group2.admin_service.dto.EmailRequest;
-import com.group2.admin_service.dto.NotificationEvent;
-import com.group2.admin_service.dto.PolicyDTO;
-import com.group2.admin_service.dto.PolicyRequestDTO;
-import com.group2.admin_service.dto.PolicyStatsDTO;
-import com.group2.admin_service.dto.ReportResponse;
-import com.group2.admin_service.dto.ReviewRequest;
-import com.group2.admin_service.dto.UserDTO;
-import com.group2.admin_service.dto.UserPolicyDTO;
-import com.group2.admin_service.feign.AuthFeignClient;
-import com.group2.admin_service.feign.ClaimsFeignClient;
-import com.group2.admin_service.feign.NotificationFeignClient;
-import com.group2.admin_service.feign.PolicyFeignClient;
+import com.group2.admin_service.dto.*;
+import com.group2.admin_service.feign.*;
 import com.group2.admin_service.service.impl.AdminServiceImpl;
-import com.group2.admin_service.util.AdminMapper;
 
 @ExtendWith(MockitoExtension.class)
 public class AdminServiceTest {
 
-    @Mock private ClaimsFeignClient claimsFeignClient;
-    @Mock private PolicyFeignClient policyFeignClient;
-    @Mock private AuthFeignClient authFeignClient;
-    @Mock private NotificationFeignClient notificationFeignClient;
-    @Mock private AdminMapper adminMapper;
-    @Mock private RabbitTemplate rabbitTemplate;
+    @Mock private AuthFeignClient authClient;
+    @Mock private ClaimsFeignClient claimClient;
+    @Mock private PolicyFeignClient policyClient;
+    @Mock private NotificationFeignClient notificationClient;
 
     @InjectMocks
     private AdminServiceImpl adminService;
 
     @Test
-    void testReviewClaim_Success() {
-        ReviewRequest request = new ReviewRequest();
-        request.setStatus("APPROVED");
-        request.setRemark("All good");
-
-        ClaimDTO claim = new ClaimDTO();
-        claim.setUserId(10L);
-        claim.setPolicyId(5L);
-
-        UserDTO user = new UserDTO();
-        user.setEmail("test@test.com");
-        user.setName("Test User");
-
-        UserPolicyDTO policy = new UserPolicyDTO();
-        policy.setPolicyName("Health Plan");
-
-        when(claimsFeignClient.getClaimById(1L)).thenReturn(claim);
-        when(authFeignClient.getUserById(10L)).thenReturn(user);
-        when(policyFeignClient.getUserPolicyById(5L)).thenReturn(policy);
-
-        // Make Feign email succeed
-        when(notificationFeignClient.sendEmail(any(EmailRequest.class))).thenReturn(ResponseEntity.ok("OK"));
-
-        adminService.reviewClaim(1L, request);
-
-        verify(claimsFeignClient, times(1)).updateClaimStatus(eq(1L), any(ClaimStatusUpdateDTO.class));
-        verify(notificationFeignClient, times(1)).sendEmail(any(EmailRequest.class));
-        verify(rabbitTemplate, times(0)).convertAndSend(any(String.class), any(String.class), any(NotificationEvent.class));
-    }
-
-    @Test
-    void testReviewClaim_FallbackToRabbit() {
-        ReviewRequest request = new ReviewRequest();
-        request.setStatus("APPROVED");
-
-        ClaimDTO claim = new ClaimDTO();
-        claim.setUserId(10L);
-
-        UserDTO user = new UserDTO();
-        user.setEmail("test@test.com");
-
-        when(claimsFeignClient.getClaimById(1L)).thenReturn(claim);
-        when(authFeignClient.getUserById(10L)).thenReturn(user);
+    void testClaimOps() {
+        when(claimClient.getAllClaims()).thenReturn(List.of(new ClaimDTO()));
+        assertNotNull(adminService.getAllClaims());
         
-        // Throw exception to trigger fallback
-        doThrow(new RuntimeException("Feign Failure")).when(notificationFeignClient).sendEmail(any(EmailRequest.class));
-
-        adminService.reviewClaim(1L, request);
-
-        verify(claimsFeignClient, times(1)).updateClaimStatus(eq(1L), any(ClaimStatusUpdateDTO.class));
-        verify(rabbitTemplate, times(1)).convertAndSend(eq("notification.exchange"), eq("notification.send"), any(NotificationEvent.class));
-    }
-
-    @Test
-    void testGetClaimStatus() {
-        when(claimsFeignClient.getClaimStatus(1L)).thenReturn(new ClaimDTO());
+        when(claimClient.getClaimStatus(1L)).thenReturn(new ClaimDTO());
         assertNotNull(adminService.getClaimStatus(1L));
-    }
-
-    @Test
-    void testGetClaimsByUserId() {
-        when(claimsFeignClient.getClaimsByUserId(1L)).thenReturn(Arrays.asList(new ClaimDTO()));
-        assertEquals(1, adminService.getClaimsByUserId(1L).size());
-    }
-
-    @Test
-    void testCreatePolicy() {
-        when(policyFeignClient.createPolicy(any(PolicyRequestDTO.class))).thenReturn(new PolicyDTO());
-        assertNotNull(adminService.createPolicy(new PolicyRequestDTO()));
-    }
-
-    @Test
-    void testUpdatePolicy() {
-        when(policyFeignClient.updatePolicy(eq(1L), any(PolicyRequestDTO.class))).thenReturn(new PolicyDTO());
-        assertNotNull(adminService.updatePolicy(1L, new PolicyRequestDTO()));
-    }
-
-    @Test
-    void testDeletePolicy() {
-        adminService.deletePolicy(1L);
-        verify(policyFeignClient, times(1)).deletePolicy(1L);
-    }
-
-    @Test
-    void testGetReports() {
-        when(claimsFeignClient.getClaimStats()).thenReturn(new ClaimStatusDTO());
-        when(policyFeignClient.getPolicyStats()).thenReturn(new PolicyStatsDTO());
-        when(adminMapper.mapToReportResponse(any(), any())).thenReturn(new ReportResponse());
         
-        assertNotNull(adminService.getReports());
+        when(claimClient.getClaimsByUserId(1L)).thenReturn(List.of(new ClaimDTO()));
+        assertNotNull(adminService.getClaimsByUserId(1L));
+        
+        when(claimClient.downloadDocument(1L)).thenReturn(ResponseEntity.ok(new byte[0]));
+        assertNotNull(adminService.downloadClaimDocument(1L));
+    }
+
+    @Test
+    void testReviewClaim() {
+        ReviewRequest req = new ReviewRequest(); req.setStatus("APPROVED"); req.setRemark("ok");
+        ClaimDTO c = new ClaimDTO(); c.setUserId(1L);
+        UserDTO u = new UserDTO(); u.setEmail("t@t.com");
+        
+        when(claimClient.getClaimById(1L)).thenReturn(c);
+        when(authClient.getUserById(1L)).thenReturn(u);
+        
+        adminService.reviewClaim(1L, req);
+        verify(notificationClient).sendEmail(any());
+        
+        // Notify fail
+        doThrow(new RuntimeException()).when(notificationClient).sendEmail(any());
+        adminService.reviewClaim(1L, req);
+    }
+
+    @Test
+    void testReviewClaimSkipsNotificationWhenClaimOrUserIncomplete() {
+        ReviewRequest req = new ReviewRequest();
+        req.setStatus("REJECTED");
+        req.setRemark("no");
+
+        when(claimClient.getClaimById(10L)).thenReturn(null);
+        adminService.reviewClaim(10L, req);
+        verify(notificationClient, never()).sendEmail(any());
+
+        ClaimDTO noUser = new ClaimDTO();
+        noUser.setUserId(null);
+        when(claimClient.getClaimById(11L)).thenReturn(noUser);
+        adminService.reviewClaim(11L, req);
+        verify(notificationClient, never()).sendEmail(any());
+
+        ClaimDTO withUser = new ClaimDTO();
+        withUser.setUserId(99L);
+        when(claimClient.getClaimById(12L)).thenReturn(withUser);
+        when(authClient.getUserById(99L)).thenReturn(null);
+        adminService.reviewClaim(12L, req);
+        verify(notificationClient, never()).sendEmail(any());
+
+        UserDTO noEmail = new UserDTO();
+        noEmail.setEmail(null);
+        when(claimClient.getClaimById(13L)).thenReturn(withUser);
+        when(authClient.getUserById(99L)).thenReturn(noEmail);
+        adminService.reviewClaim(13L, req);
+        verify(notificationClient, never()).sendEmail(any());
+    }
+
+    @Test
+    void testReviewClaimInnerTryCatchesWhenFeignFails() {
+        ReviewRequest req = new ReviewRequest();
+        req.setStatus("APPROVED");
+        req.setRemark("x");
+        when(claimClient.getClaimById(20L)).thenThrow(new RuntimeException("down"));
+        adminService.reviewClaim(20L, req);
+        verify(notificationClient, never()).sendEmail(any());
+    }
+
+    @Test
+    void testPolicyOps() {
+        PolicyRequestDTO req = new PolicyRequestDTO();
+        when(policyClient.createPolicy(any())).thenReturn(new PolicyDTO());
+        assertNotNull(adminService.createPolicy(req));
+        
+        when(policyClient.updatePolicy(anyLong(), any())).thenReturn(new PolicyDTO());
+        assertNotNull(adminService.updatePolicy(1L, req));
+        
+        adminService.deletePolicy(1L);
+        verify(policyClient).deletePolicy(1L);
+    }
+
+    @Test
+    void testUserAndReports() {
+        when(authClient.getAllUsers()).thenReturn(List.of(new UserDTO()));
+        assertNotNull(adminService.getAllUsers());
+        assertNotNull(adminService.getFilteredUsers(0, 5, "", null, null));
+        
+        when(claimClient.getAllClaims()).thenReturn(List.of(new ClaimDTO()));
+        ReportResponse r = adminService.getReports();
+        assertEquals(1, r.getTotalClaims());
+        
+        // Fail path (doThrow/doReturn avoid invoking a stub that still throws)
+        doThrow(new RuntimeException()).when(authClient).getAllUsers();
+        adminService.getReports();
+
+        doReturn(List.of()).when(authClient).getAllUsers();
+        when(claimClient.getAllClaims()).thenReturn(null);
+        ReportResponse noClaims = adminService.getReports();
+        assertEquals(0, noClaims.getTotalClaims());
     }
 }

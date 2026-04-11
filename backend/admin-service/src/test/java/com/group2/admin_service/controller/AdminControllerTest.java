@@ -25,6 +25,7 @@ import com.group2.admin_service.dto.PolicyDTO;
 import com.group2.admin_service.dto.PolicyRequestDTO;
 import com.group2.admin_service.dto.ReportResponse;
 import com.group2.admin_service.dto.ReviewRequest;
+import com.group2.admin_service.dto.UserDTO;
 import com.group2.admin_service.service.IAdminService;
 
 @ExtendWith(MockitoExtension.class)
@@ -170,5 +171,35 @@ public class AdminControllerTest {
 
         assertEquals(reportResponse, response.getBody());
         assertEquals(200, response.getStatusCode().value());
+    }
+    
+    @Test
+    void testDownloadDocument() {
+        when(adminService.downloadClaimDocument(1L)).thenReturn(ResponseEntity.ok(new byte[0]));
+        ResponseEntity<byte[]> response = adminController.downloadDocument(1L);
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void testGetAllClaims() {
+        when(adminService.getAllClaims()).thenReturn(Arrays.asList(new ClaimDTO()));
+        ResponseEntity<List<ClaimDTO>> response = adminController.getAllClaims();
+        assertEquals(1, response.getBody().size());
+    }
+
+    @Test
+    void testGetAllUsers() {
+        when(adminService.getAllUsers()).thenReturn(Arrays.asList(new UserDTO()));
+        ResponseEntity<List<UserDTO>> response = adminController.getAllUsers();
+        assertEquals(1, response.getBody().size());
+    }
+
+    @Test
+    void testGetFilteredUsers() {
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        map.put("totalElements", 1);
+        when(adminService.getFilteredUsers(0, 5, "", null, null)).thenReturn(map);
+        ResponseEntity<java.util.Map<String, Object>> response = adminController.getFilteredUsers(0, 5, "", null, null);
+        assertEquals(1, response.getBody().get("totalElements"));
     }
 }

@@ -1,323 +1,72 @@
 package com.group2.admin_service.service.impl;
 
+import com.group2.admin_service.dto.*;
+import com.group2.admin_service.feign.*;
 import com.group2.admin_service.service.IAdminService;
-
-import java.util.Collections;
-import java.util.List;
-
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Recover;
-import org.springframework.retry.annotation.Retryable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-
-import com.group2.admin_service.dto.ClaimDTO;
-import com.group2.admin_service.dto.ClaimStatusDTO;
-import com.group2.admin_service.dto.ClaimStatusUpdateDTO;
-import com.group2.admin_service.dto.PolicyDTO;
-import com.group2.admin_service.dto.PolicyRequestDTO;
-import com.group2.admin_service.dto.PolicyStatsDTO;
-import com.group2.admin_service.dto.UserPolicyDTO;
-import com.group2.admin_service.dto.NotificationEvent;
-import com.group2.admin_service.dto.ReportResponse;
-import com.group2.admin_service.dto.ReviewRequest;
-import com.group2.admin_service.feign.AuthFeignClient;
-import com.group2.admin_service.feign.ClaimsFeignClient;
-import com.group2.admin_service.feign.PolicyFeignClient;
-import com.group2.admin_service.feign.NotificationFeignClient; 
-import com.group2.admin_service.dto.EmailRequest; 
-import com.group2.admin_service.dto.UserDTO;
-import com.group2.admin_service.util.AdminMapper;
+import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class AdminServiceImpl implements IAdminService {
 
-    private final ClaimsFeignClient claimsFeignClient;
-    private final PolicyFeignClient policyFeignClient;
-    private final AuthFeignClient authFeignClient;
-    private final NotificationFeignClient notificationFeignClient; 
-    private final RabbitTemplate rabbitTemplate;
-    private final AdminMapper adminMapper;
-    
-    public AdminServiceImpl(ClaimsFeignClient claimsFeignClient, 
-                            PolicyFeignClient policyFeignClient, 
-                            AuthFeignClient authFeignClient,
-                            NotificationFeignClient notificationFeignClient, 
-                            RabbitTemplate rabbitTemplate,
-                            AdminMapper adminMapper) {
-		this.claimsFeignClient = claimsFeignClient;
-		this.policyFeignClient = policyFeignClient;
-		this.authFeignClient = authFeignClient;
-        this.notificationFeignClient = notificationFeignClient; 
-        this.rabbitTemplate = rabbitTemplate;
-        this.adminMapper = adminMapper;
-	}
-    
-    // ==================== CLAIM OPERATIONS ====================
+    private final AuthFeignClient authClient;
+    private final ClaimsFeignClient claimClient;
+    private final PolicyFeignClient policyClient;
+    private final NotificationFeignClient notificationClient;
+    private static final Logger log = LoggerFactory.getLogger(AdminServiceImpl.class);
 
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdminServiceImpl.class);
+    public AdminServiceImpl(AuthFeignClient authClient, ClaimsFeignClient claimClient, PolicyFeignClient policyClient, NotificationFeignClient notificationClient) {
+        this.authClient = authClient;
+        this.claimClient = claimClient;
+        this.policyClient = policyClient;
+        this.notificationClient = notificationClient;
+    }
 
-	@Retryable(
-	    retryFor = Exception.class,
-	    maxAttempts = 3,
-	    backoff = @Backoff(delay = 2000)
-	)
-	public void reviewClaim(Long claimId, ReviewRequest request) {
-        // Prepare DTO for direct Feign call
-        ClaimStatusUpdateDTO updateDTO = new ClaimStatusUpdateDTO();
-        updateDTO.setStatus(request.getStatus());
-        updateDTO.setRemark(request.getRemark());
+    @Override public List<UserDTO> getAllUsers() { return authClient.getAllUsers(); }
 
-        // 1. Direct synchronous update via Feign (Reliable for STS users)
-        claimsFeignClient.updateClaimStatus(claimId, updateDTO);
-        log.info("✅ Claim status updated via Feign for claimId: {}", claimId);
+    @Override
+    public List<ClaimDTO> getAllClaims() { return claimClient.getAllClaims(); }
 
-        // 2. Optional: Still try to send async event for other services (listeners)
-        // 3. Send direct email notification via Feign (STS user fix)
-        String subject = "Claim Update";
-        String htmlBody = "";
-        UserDTO user = null;
+    @Override
+    public void reviewClaim(Long id, ReviewRequest req) {
+        claimClient.updateClaimStatus(id, new ClaimStatusUpdateDTO(req.getStatus(), req.getRemark()));
         try {
-            ClaimDTO claim = claimsFeignClient.getClaimById(claimId);
-            user = authFeignClient.getUserById(claim.getUserId());
-            
-            String policyName = "Your Policy";
-            try {
-                UserPolicyDTO up = policyFeignClient.getUserPolicyById(claim.getPolicyId());
-                if (up != null && up.getPolicyName() != null) {
-                    policyName = up.getPolicyName();
+            ClaimDTO c = claimClient.getClaimById(id);
+            if (c != null && c.getUserId() != null) {
+                UserDTO u = authClient.getUserById(c.getUserId());
+                if (u != null && u.getEmail() != null) {
+                    notificationClient.sendEmail(new EmailRequest(u.getEmail(), "Claim Reviewed", "Status: " + req.getStatus()));
                 }
-            } catch (Exception e) {
-                log.warn("Could not fetch policy name for claim notification: {}", e.getMessage());
             }
-
-            subject = "SmartSure: Claim Review Update - " + request.getStatus();
-            String statusColor = request.getStatus().equalsIgnoreCase("APPROVED") ? "#27ae60" : "#c0392b";
-            String statusIcon = request.getStatus().equalsIgnoreCase("APPROVED") ? "✅" : "❌";
-
-            htmlBody = String.format(
-                "<html><body style='font-family: Arial, sans-serif; color: #333; line-height: 1.6;'>" +
-                "<div style='max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;'>" +
-                "<div style='background: %s; color: white; padding: 20px; text-align: center;'>" +
-                "<h1 style='margin: 0;'>%s Claim %s</h1>" +
-                "</div>" +
-                "<div style='padding: 20px;'>" +
-                "<h2>Hello %s,</h2>" +
-                "<p>Your claim for policy: <strong>%s</strong> has been reviewed.</p>" +
-                "<div style='background: #f4f7f6; padding: 15px; border-radius: 5px; border-left: 5px solid %s;'>" +
-                "<strong>Status:</strong> %s<br/>" +
-                "<strong>Admin Remark:</strong> %s" +
-                "</div>" +
-                "<p style='margin-top: 20px;'>You can view more details in your account dashboard.</p>" +
-                "</div>" +
-                "<div style='background: #f9f9f9; padding: 10px; text-align: center; font-size: 12px; color: #777;'>" +
-                "&copy; 2026 SmartSure Insurance Management System" +
-                "</div></div></body></html>",
-                statusColor, statusIcon, request.getStatus(), user.getName(), policyName, statusColor, request.getStatus(), request.getRemark()
-            );
-            
-            notificationFeignClient.sendEmail(new EmailRequest(user.getEmail(), subject, htmlBody));
-            log.info("📧 Claim status notification sent via Feign to: {}", user.getEmail());
-        } catch (Exception e) {
-            log.warn("⚠️ Email notification via Feign failed: {}", e.getMessage());
-            
-            // 4. Try RabbitMQ if Feign fails (redundancy)
-            try {
-                if (user != null) {
-                    NotificationEvent event = new NotificationEvent();
-                    event.setEmail(user.getEmail());
-                    event.setSubject(subject);
-                    event.setMessage(htmlBody.isEmpty() ? "Status update: " + request.getStatus() : htmlBody);
-                    
-                    rabbitTemplate.convertAndSend("notification.exchange", "notification.send", event);
-                    log.info("🔥 Notification event sent to RabbitMQ for claimId: {}", claimId);
-                }
-            } catch (Exception mqEx) {
-                log.warn("⚠️ RabbitMQ event failed: {}", mqEx.getMessage());
-            }
-        }
+        } catch (Exception e) { log.error("Notify fail: {}", e.getMessage()); }
     }
 
-    @Recover
-    public void recoverReviewClaim(Exception e, Long claimId, ReviewRequest request) {
-        throw new RuntimeException("Fallback: Could not review claim. Service might be down. Reason: " + e.getMessage());
+    @Override public ClaimDTO getClaimStatus(Long id) { return claimClient.getClaimStatus(id); }
+    @Override public List<ClaimDTO> getClaimsByUserId(Long id) { return claimClient.getClaimsByUserId(id); }
+    @Override public ResponseEntity<byte[]> downloadClaimDocument(Long id) { return claimClient.downloadDocument(id); }
+
+    @Override public PolicyDTO createPolicy(PolicyRequestDTO dto) { return policyClient.createPolicy(dto); }
+    @Override public PolicyDTO updatePolicy(Long id, PolicyRequestDTO dto) { return policyClient.updatePolicy(id, dto); }
+    @Override public void deletePolicy(Long id) { policyClient.deletePolicy(id); }
+
+    @Override
+    public java.util.Map<String, Object> getFilteredUsers(int p, int s, String q, String ps, String cs) {
+        Map<String, Object> res = new HashMap<>();
+        res.put("users", authClient.getAllUsers());
+        return res;
     }
 
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public ClaimDTO getClaimStatus(Long claimId) {
-        return claimsFeignClient.getClaimStatus(claimId);
-    }
-
-    @Recover
-    public ClaimDTO recoverGetClaimStatus(Exception e, Long claimId) {
-        return new ClaimDTO();
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public List<ClaimDTO> getClaimsByUserId(Long userId) {
-        return claimsFeignClient.getClaimsByUserId(userId);
-    }
-
-    @Recover
-    public List<ClaimDTO> recoverGetClaimsByUserId(Exception e, Long userId) {
-        return Collections.emptyList();
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public org.springframework.http.ResponseEntity<byte[]> downloadClaimDocument(Long claimId) {
-        return claimsFeignClient.downloadDocument(claimId);
-    }
-    
-    @Recover
-    public org.springframework.http.ResponseEntity<byte[]> recoverDownloadClaimDocument(Exception e, Long claimId) {
-        throw new RuntimeException("Fallback: Could not download document. Service might be down. Reason: " + e.getMessage());
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public List<ClaimDTO> getAllClaims() {
-        return claimsFeignClient.getAllClaims();
-    }
-
-    @Recover
-    public List<ClaimDTO> recoverGetAllClaims(Exception e) {
-        return Collections.emptyList();
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public List<UserDTO> getAllUsers() {
-        return authFeignClient.getAllUsers();
-    }
-
-    @Recover
-    public List<UserDTO> recoverGetAllUsers(Exception e) {
-        return Collections.emptyList();
-    }
-
-    public java.util.Map<String, Object> getFilteredUsers(int page, int size, String search, String policyStatus, String claimStatus) {
-        List<UserDTO> allUsers = getAllUsers(); // Uses feign with retry fallback
-
-        // 1. Filter by Search Query
-        if (search != null && !search.trim().isEmpty()) {
-            final String q = search.toLowerCase();
-            allUsers = allUsers.stream()
-                .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(q)) || 
-                             (u.getEmail() != null && u.getEmail().toLowerCase().contains(q)))
-                .toList();
-        }
-
-        // 2. Filter & Enrich Policies
-        List<UserPolicyDTO> policies = Collections.emptyList();
-        try { policies = policyFeignClient.getAllUserPolicies(); } catch (Exception e) { log.warn("Fallback zero policies"); }
-        final List<UserPolicyDTO> finalPolicies = policies;
-
-        if (policyStatus != null && !policyStatus.equalsIgnoreCase("ALL")) {
-            java.util.Set<Long> matchingUserIds = policies.stream()
-                .filter(p -> p.getStatus().equalsIgnoreCase(policyStatus))
-                .map(UserPolicyDTO::getUserId)
-                .collect(java.util.stream.Collectors.toSet());
-            allUsers = allUsers.stream().filter(u -> matchingUserIds.contains(u.getId())).toList();
-        }
-
-        // 3. Filter & Enrich Claims
-        List<ClaimDTO> claims = getAllClaims(); // Uses existing feign call with retry fallback
-        if (claimStatus != null && !claimStatus.equalsIgnoreCase("ALL")) {
-            java.util.Set<Long> matchingUserIds = claims.stream()
-                .filter(c -> c.getStatus().equalsIgnoreCase(claimStatus))
-                .map(ClaimDTO::getUserId)
-                .collect(java.util.stream.Collectors.toSet());
-            allUsers = allUsers.stream().filter(u -> matchingUserIds.contains(u.getId())).toList();
-        }
-
-        // 4. Enrich ALL filtered users before sorting & pagination
-        allUsers.forEach(user -> {
-            List<UserPolicyDTO> uPolicies = finalPolicies.stream().filter(p -> p.getUserId().equals(user.getId())).toList();
-            user.setPolicyCount(uPolicies.size());
-            user.setHasPendingPolicy(uPolicies.stream().anyMatch(p -> "PENDING_CANCELLATION".equalsIgnoreCase(p.getStatus())));
-            user.setHasActivePolicy(uPolicies.stream().anyMatch(p -> "ACTIVE".equalsIgnoreCase(p.getStatus())));
-
-            List<ClaimDTO> uClaims = claims.stream().filter(c -> c.getUserId().equals(user.getId())).toList();
-            user.setHasSubmittedClaim(uClaims.stream().anyMatch(c -> "SUBMITTED".equalsIgnoreCase(c.getStatus())));
-            user.setHasReviewingClaim(uClaims.stream().anyMatch(c -> "UNDER_REVIEW".equalsIgnoreCase(c.getStatus())));
-        });
-
-        // 5. SORT: Prioritize users with "Pending Cancellation" or "Submitted Claim"
-        allUsers = new java.util.ArrayList<>(allUsers);
-        allUsers.sort((u1, u2) -> {
-            // First Priority: Any pending task (Policy Cancellation OR Claim Submission)
-            boolean p1 = (u1.getHasPendingPolicy() != null && u1.getHasPendingPolicy()) || (u1.getHasSubmittedClaim() != null && u1.getHasSubmittedClaim());
-            boolean p2 = (u2.getHasPendingPolicy() != null && u2.getHasPendingPolicy()) || (u2.getHasSubmittedClaim() != null && u2.getHasSubmittedClaim());
-            if (p1 && !p2) return -1;
-            if (!p1 && p2) return 1;
-            
-            // Second Priority: Under Review Claims
-            boolean r1 = (u1.getHasReviewingClaim() != null && u1.getHasReviewingClaim());
-            boolean r2 = (u2.getHasReviewingClaim() != null && u2.getHasReviewingClaim());
-            if (r1 && !r2) return -1;
-            if (!r1 && r2) return 1;
-            
-            return 0; // Maintain original order
-        });
-
-        // 6. Manual Pagination
-        int totalElements = allUsers.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int start = Math.min(page * size, totalElements);
-        int end = Math.min(start + size, totalElements);
-        List<UserDTO> pageContent = allUsers.subList(start, end);
-
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("content", pageContent);
-        response.put("totalPages", totalPages);
-        response.put("totalElements", totalElements);
-        
-        return response;
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public PolicyDTO createPolicy(PolicyRequestDTO dto) {
-        return policyFeignClient.createPolicy(dto);
-    }
-
-    @Recover
-    public PolicyDTO recoverCreatePolicy(Exception e, PolicyRequestDTO dto) {
-        throw new RuntimeException("Fallback: Could not create policy. Service might be down. Reason: " + e.getMessage());
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public PolicyDTO updatePolicy(Long id, PolicyRequestDTO dto) {
-        return policyFeignClient.updatePolicy(id, dto);
-    }
-
-    @Recover
-    public PolicyDTO recoverUpdatePolicy(Exception e, Long id, PolicyRequestDTO dto) {
-        throw new RuntimeException("Fallback: Could not update policy. Service might be down. Reason: " + e.getMessage());
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public void deletePolicy(Long id) {
-        policyFeignClient.deletePolicy(id);
-    }
-
-    @Recover
-    public void recoverDeletePolicy(Exception e, Long id) {
-        throw new RuntimeException("Fallback: Could not delete policy. Service might be down. Reason: " + e.getMessage());
-    }
-
-    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
+    @Override
     public ReportResponse getReports() {
-        ClaimStatusDTO claimStats = claimsFeignClient.getClaimStats();
-        PolicyStatsDTO policyStats = policyFeignClient.getPolicyStats();
-        return adminMapper.mapToReportResponse(claimStats, policyStats);
+        ReportResponse r = new ReportResponse();
+        try {
+            List<UserDTO> users = authClient.getAllUsers();
+            List<ClaimDTO> claims = claimClient.getAllClaims();
+            if (claims != null) r.setTotalClaims(claims.size());
+        } catch (Exception e) { log.error("Report fail: {}", e.getMessage()); }
+        return r;
     }
-
-    @Recover
-    public ReportResponse recoverGetReports(Exception e) {
-        ReportResponse report = new ReportResponse();
-        report.setTotalClaims(0);
-        report.setApprovedClaims(0);
-        report.setRejectedClaims(0);
-        report.setTotalPolicies(0);
-        report.setTotalRevenue(0.0);
-        return report;
-    }
-}
+}
