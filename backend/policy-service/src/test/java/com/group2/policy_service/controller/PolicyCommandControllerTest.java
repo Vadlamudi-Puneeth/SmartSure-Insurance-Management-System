@@ -48,15 +48,13 @@ public class PolicyCommandControllerTest {
     @Test
     void testCreatePolicy() {
         when(commandService.createPolicy(any(PolicyRequestDTO.class))).thenReturn(mockPolicyResponse);
-        PolicyResponseDTO res = controller.createPolicy(new PolicyRequestDTO());
-        assertEquals(10L, res.getId());
+        assertEquals(10L, controller.createPolicy(new PolicyRequestDTO()).getId());
     }
 
     @Test
     void testUpdatePolicy() {
         when(commandService.updatePolicy(eq(10L), any(PolicyRequestDTO.class))).thenReturn(mockPolicyResponse);
-        PolicyResponseDTO res = controller.updatePolicy(10L, new PolicyRequestDTO());
-        assertEquals(10L, res.getId());
+        assertEquals(10L, controller.updatePolicy(10L, new PolicyRequestDTO()).getId());
     }
 
     @Test
@@ -68,8 +66,7 @@ public class PolicyCommandControllerTest {
     @Test
     void testPurchasePolicy() {
         when(commandService.purchasePolicy(10L)).thenReturn(mockUserPolicyResponse);
-        UserPolicyResponseDTO res = controller.purchasePolicy(10L);
-        assertEquals(5L, res.getId());
+        assertEquals(5L, controller.purchasePolicy(10L).getId());
     }
 
     @Test
@@ -77,21 +74,24 @@ public class PolicyCommandControllerTest {
         when(commandService.requestCancellation(eq(5L), any())).thenReturn(mockUserPolicyResponse);
         java.util.Map<String, String> body = new java.util.HashMap<>();
         body.put("reason", "Reason");
-        ResponseEntity<UserPolicyResponseDTO> res = controller.requestCancellation(5L, body);
-        assertEquals(200, res.getStatusCode().value());
+        assertEquals(200, controller.requestCancellation(5L, body).getStatusCode().value());
+    }
+
+    @Test
+    void testRequestCancellation_NoBody() {
+        when(commandService.requestCancellation(eq(5L), any())).thenReturn(mockUserPolicyResponse);
+        assertEquals(200, controller.requestCancellation(5L, null).getStatusCode().value());
     }
 
     @Test
     void testApproveCancellation() {
         when(commandService.approveCancellation(5L)).thenReturn(mockUserPolicyResponse);
-        ResponseEntity<UserPolicyResponseDTO> res = controller.approveCancellation(5L);
-        assertEquals(200, res.getStatusCode().value());
+        assertEquals(200, controller.approveCancellation(5L).getStatusCode().value());
     }
 
     @Test
     void testPayPremium() {
         when(commandService.payPremium(5L, 100.0)).thenReturn(mockUserPolicyResponse);
-        ResponseEntity<UserPolicyResponseDTO> res = controller.payPremium(5L, 100.0);
-        assertEquals(200, res.getStatusCode().value());
+        assertEquals(200, controller.payPremium(5L, 100.0).getStatusCode().value());
     }
 }

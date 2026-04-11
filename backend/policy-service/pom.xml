@@ -153,10 +153,19 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
-					<plugin>
+			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.11</version>
+				<configuration>
+					<excludes>
+						<exclude>com/group2/policy_service/config/**</exclude>
+						<exclude>com/group2/policy_service/dto/**</exclude>
+						<exclude>com/group2/policy_service/entity/**</exclude>
+						<exclude>com/group2/policy_service/security/SecurityConfig.class</exclude>
+						<exclude>**/PolicyServiceApplication.class</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<execution>
 						<goals>

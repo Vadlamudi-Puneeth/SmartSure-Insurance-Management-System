@@ -31,31 +31,36 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader("Authorization");
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+        if (authHeader == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            try {
-                if (jwtUtil.validateToken(token)) {
-                    Long userId = jwtUtil.extractUserId(token);
-                    String role = jwtUtil.extractRole(token);
+        if (!authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-                    if (userId != null && role != null) {
-                        String authorityRole = role.startsWith("ROLE_") ? role.toUpperCase() : "ROLE_" + role.toUpperCase();
-                        
-                        UsernamePasswordAuthenticationToken authentication =
-                                new UsernamePasswordAuthenticationToken(
-                                        userId,
-                                        null,
-                                        Collections.singleton(new SimpleGrantedAuthority(authorityRole))
-                                );
+        String token = authHeader.substring(7);
 
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
+        try {
+            if (jwtUtil.validateToken(token)) {
+                Long userId = jwtUtil.extractUserId(token);
+                String role = jwtUtil.extractRole(token);
+
+                if (userId != null) {
+                    if (role != null) {
+                        String authorityRole = role.startsWith("ROLE_")
+                                ? role.toUpperCase()
+                                : "ROLE_" + role.toUpperCase();
+                        SecurityContextHolder.getContext().setAuthentication(
+                                new UsernamePasswordAuthenticationToken(userId, null,
+                                        Collections.singleton(new SimpleGrantedAuthority(authorityRole))));
                     }
                 }
-            } catch (Exception e) {
-                // Log and continue, or handle as unauthorized
-                System.err.println("JWT Filtering failed: " + e.getMessage());
             }
+        } catch (Exception e) {
+            System.err.println("JWT Filtering failed: " + e.getMessage());
         }
 
         filterChain.doFilter(request, response);

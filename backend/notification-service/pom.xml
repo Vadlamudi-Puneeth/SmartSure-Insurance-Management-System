@@ -114,10 +114,18 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
-					<plugin>
+			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.11</version>
+				<configuration>
+					<excludes>
+						<exclude>com/group2/notification_service/config/**</exclude>
+						<exclude>com/group2/notification_service/dto/**</exclude>
+						<exclude>com/group2/notification_service/entity/**</exclude>
+						<exclude>**/NotificationServiceApplication.class</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<execution>
 						<goals>
@@ -137,4 +145,5 @@
 	</build>
 
 </project>
+
 

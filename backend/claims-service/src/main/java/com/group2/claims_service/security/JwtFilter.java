@@ -31,29 +31,33 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader("Authorization");
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        if (authHeader == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            String token = authHeader.substring(7);
+        if (!authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            try {
-                var claims = jwtUtil.extractClaims(token);
+        String token = authHeader.substring(7);
 
-                Long userId = Long.parseLong(claims.get("userId").toString());
-                String role = (String) claims.get("role");
+        try {
+            var claims = jwtUtil.extractClaims(token);
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userId,
-                                null,
-                                Collections.singleton(new SimpleGrantedAuthority("ROLE_" + role))
-                        );
+            Long userId = Long.parseLong(claims.get("userId").toString());
+            String role = (String) claims.get("role");
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            } catch (Exception e) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return;
+            if (role != null) {
+                SecurityContextHolder.getContext().setAuthentication(
+                        new UsernamePasswordAuthenticationToken(userId, null,
+                                Collections.singleton(new SimpleGrantedAuthority("ROLE_" + role))));
             }
+
+        } catch (Exception e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
 
         filterChain.doFilter(request, response);

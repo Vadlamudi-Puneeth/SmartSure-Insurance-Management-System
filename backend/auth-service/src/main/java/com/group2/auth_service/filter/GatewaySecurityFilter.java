@@ -34,6 +34,13 @@ public class GatewaySecurityFilter extends OncePerRequestFilter {
         String secret = request.getHeader(GATEWAY_SECRET_HEADER);
         if (secret != null && GATEWAY_SECRET_VALUE.equals(secret.trim())) {
             filterChain.doFilter(request, response);
+        } else if (secret != null) {
+            // Header present but wrong value
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            PrintWriter writer = response.getWriter();
+            writer.print("{\"error\": \"Unauthorized\", \"message\": \"Invalid gateway secret.\"}");
+            writer.flush();
         } else {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");

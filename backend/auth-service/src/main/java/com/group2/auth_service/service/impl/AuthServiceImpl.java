@@ -1,28 +1,19 @@
 package com.group2.auth_service.service.impl;
 
 import com.group2.auth_service.service.IAuthService;
-import com.group2.auth_service.dto.PageResponseDTO;
-import java.util.Optional;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import jakarta.transaction.Transactional;
-
-import com.group2.auth_service.dto.AuthResponse;
-import com.group2.auth_service.dto.LoginRequest;
-import com.group2.auth_service.dto.RegisterRequest;
-import com.group2.auth_service.dto.ResetPasswordRequest;
-import com.group2.auth_service.dto.UserProfileRequest;
-import com.group2.auth_service.dto.UserResponseDTO;
-import com.group2.auth_service.entity.Role;
-import com.group2.auth_service.entity.User;
+import com.group2.auth_service.dto.*;
+import com.group2.auth_service.entity.*;
 import com.group2.auth_service.feign.NotificationClient;
 import com.group2.auth_service.repository.AuthServiceRepository;
 import com.group2.auth_service.security.JwtUtil;
-
 import com.group2.auth_service.util.AuthMapper;
+import jakarta.transaction.Transactional;
+import org.springframework.data.domain.*;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthServiceImpl implements IAuthService {
@@ -43,196 +34,116 @@ public class AuthServiceImpl implements IAuthService {
 	
 	@org.springframework.context.annotation.Bean
 	public org.springframework.boot.CommandLineRunner dataLoader(IAuthService authService) {
-		return args -> {
-			initAdmin();
-		};
+		return args -> initAdmin();
 	}
 
     @Transactional
     public void initAdmin() {
-        Optional<User> adminOpt = userRepository.findByEmail("admin@capgemini.com");
-        if (adminOpt.isEmpty()) {
-            User admin = new User();
-            admin.setName("Admin");
-            admin.setEmail("admin@capgemini.com");
-            admin.setPassword(passwordEncoder.encode("admin123"));
-            admin.setRole(Role.ADMIN);
-            admin.setPhone("0000000000"); 
-            admin.setAddress("Admin Address");
+        if (userRepository.findByEmail("admin@capgemini.com").isEmpty()) {
+            User admin = new User(); admin.setName("Admin"); admin.setEmail("admin@capgemini.com");
+            admin.setPassword(passwordEncoder.encode("admin123")); admin.setRole(Role.ADMIN);
+            admin.setPhone("0000000000"); admin.setAddress("Admin");
             userRepository.save(admin);
-            System.out.println("Admin user initialized.");
         }
     }
 	
     @Transactional
-	public UserResponseDTO register(RegisterRequest request) {
-        String sanitizedEmail = request.getEmail().trim().toLowerCase();
-        Optional<User> existingUser = userRepository.findByEmail(sanitizedEmail);
-
-        if (existingUser.isPresent()) {
-            throw new com.group2.auth_service.exception.UserAlreadyExistsException("Email is already registered.");
-        } 
+	public UserResponseDTO register(RegisterRequest req) {
+        String email = req.getEmail().trim().toLowerCase();
+        if (userRepository.findByEmail(email).isPresent()) throw new com.group2.auth_service.exception.UserAlreadyExistsException("EXISTS");
         
-        // Use sanitizedEmail for subsequent steps
-        Boolean isVerified = notificationClient.isOtpVerified(sanitizedEmail).getBody();
-        if (Boolean.FALSE.equals(isVerified)) {
-            throw new RuntimeException("OTP not verified for registration.");
-        }
-        
-        notificationClient.markOtpAsUsed(sanitizedEmail);
+        if (Boolean.FALSE.equals(notificationClient.isOtpVerified(email).getBody())) throw new RuntimeException("OTP_NOT_VERIFIED");
+        notificationClient.markOtpAsUsed(email);
 
-        request.setEmail(sanitizedEmail); // update request with sanitized email
-
-        User user = authMapper.mapToUser(request);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));    
-        user.setRole(Role.CUSTOMER); 
-        
+        req.setEmail(email);
+        User user = authMapper.mapToUser(req);
+        user.setPassword(passwordEncoder.encode(req.getPassword())); user.setRole(Role.CUSTOMER); 
         return authMapper.mapToResponse(userRepository.save(user));
 	}
 
 	@Transactional
-	public AuthResponse login(LoginRequest request) {
-	    String sanitizedEmail = request.getEmail().trim().toLowerCase();
-	    User user = userRepository.findByEmail(sanitizedEmail)
-	            .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+	public AuthResponse login(LoginRequest req) {
+	    String email = req.getEmail().trim().toLowerCase();
+	    User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("INVALID"));
+	    if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) throw new RuntimeException("INVALID");
 	    
-	    if (passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-	        String token = jwtUtil.generateToken(user.getEmail(), user.getId(), user.getRole().name());
-	        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail(), user.getId());
-	        
-	        user.setRefreshToken(refreshToken);
-	        userRepository.save(user);
-	        
-	        return new AuthResponse(token, refreshToken, user.getRole().name(), user.getId());
-	    }
-	    throw new RuntimeException("Invalid credentials");
+	    String token = jwtUtil.generateToken(user.getEmail(), user.getId(), user.getRole().name());
+	    String refresh = jwtUtil.generateRefreshToken(user.getEmail(), user.getId());
+	    user.setRefreshToken(refresh);
+	    userRepository.save(user);
+	    return new AuthResponse(token, refresh, user.getRole().name(), user.getId());
 	}
 
 	@Transactional
-	public AuthResponse refreshToken(String refreshToken) {
-	    if (jwtUtil.validateToken(refreshToken)) {
-	        Long userId = jwtUtil.extractUserId(refreshToken);
-	        User user = userRepository.findById(userId)
-	                .orElseThrow(() -> new RuntimeException("User not found"));
-	        
-	        // Industry Standard Rotation: Check if reused.
-	        // If the refresh token doesn't match what we have in the DB, it's potentially a reuse attack.
-	        if (!refreshToken.equals(user.getRefreshToken())) {
-	            user.setRefreshToken(null); // Force Logout everywhere for security
-	            userRepository.save(user);
-	            throw new RuntimeException("Security Alert: Reuse detection triggered. Please log in again.");
-	        }
+	public AuthResponse refreshToken(String token) {
+	    if (!jwtUtil.validateToken(token)) throw new RuntimeException("INVALID");
+	    
+	    Long id = jwtUtil.extractUserId(token);
+	    User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("NF"));
+	    if (!token.equals(user.getRefreshToken())) {
+            user.setRefreshToken(null); userRepository.save(user);
+            throw new RuntimeException("REUSE");
+        }
 
-	        // Valid token. Perform rotation.
-	        String newAccessToken = jwtUtil.generateToken(user.getEmail(), userId, user.getRole().name());
-	        String newRefreshToken = jwtUtil.generateRefreshToken(user.getEmail(), userId);
-	        
-	        user.setRefreshToken(newRefreshToken);
-	        userRepository.save(user);
-	        
-	        return new AuthResponse(newAccessToken, newRefreshToken, user.getRole().name(), user.getId());
-	    }
-	    throw new RuntimeException("Invalid refresh token session");
+	    String access = jwtUtil.generateToken(user.getEmail(), id, user.getRole().name());
+	    String refresh = jwtUtil.generateRefreshToken(user.getEmail(), id);
+	    user.setRefreshToken(refresh);
+	    userRepository.save(user);
+	    return new AuthResponse(access, refresh, user.getRole().name(), user.getId());
 	}
 
     public void sendRegistrationOtp(String email) {
-        String sanitizedEmail = email.trim().toLowerCase();
-        if (userRepository.findByEmail(sanitizedEmail).isPresent()) {
-            throw new com.group2.auth_service.exception.UserAlreadyExistsException("Email is already registered.");
-        }
-        notificationClient.sendOtp(sanitizedEmail);
+        String e = email.trim().toLowerCase();
+        if (userRepository.findByEmail(e).isPresent()) throw new com.group2.auth_service.exception.UserAlreadyExistsException("EXISTS");
+        notificationClient.sendOtp(e);
     }
 
-    public void verifyOtp(String email, String otp) {
-        notificationClient.verifyOtp(email.trim().toLowerCase(), otp);
-    }
+    public void verifyOtp(String email, String otp) { notificationClient.verifyOtp(email.trim().toLowerCase(), otp); }
 
     public void sendForgotPasswordOtp(String email) {
-        String sanitizedEmail = email.trim().toLowerCase();
-        if (userRepository.findByEmail(sanitizedEmail).isEmpty()) {
-            throw new RuntimeException("User with this email does not exist.");
-        }
-        notificationClient.sendOtp(sanitizedEmail);
+        String e = email.trim().toLowerCase();
+        if (userRepository.findByEmail(e).isEmpty()) throw new RuntimeException("NF");
+        notificationClient.sendOtp(e);
     }
 
     @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
-        String sanitizedEmail = request.getEmail().trim().toLowerCase();
-        Boolean isVerified = notificationClient.isOtpVerified(sanitizedEmail).getBody();
-        if (Boolean.FALSE.equals(isVerified)) {
-            throw new RuntimeException("OTP not verified for password reset.");
-        }
+    public void resetPassword(ResetPasswordRequest req) {
+        String email = req.getEmail().trim().toLowerCase();
+        if (Boolean.FALSE.equals(notificationClient.isOtpVerified(email).getBody())) throw new RuntimeException("OTP");
 
-        User user = userRepository.findByEmail(sanitizedEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("NF"));
+        user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(user);
-        
-        notificationClient.markOtpAsUsed(sanitizedEmail);
+        notificationClient.markOtpAsUsed(email);
     }
 
     @Override
     public UserResponseDTO getProfile() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        Long userId;
-        try {
-            userId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
-        } catch (NumberFormatException e) {
-            throw new RuntimeException("Authentication failed: invalid user principal");
-        }
-
-        return userRepository.findById(userId)
-                .map(authMapper::mapToResponse)
-                .orElseThrow(() -> new RuntimeException("Logged-in user not found in records"));
+        Long userId = getAuthUserId();
+        return userRepository.findById(userId).map(authMapper::mapToResponse).orElseThrow(() -> new RuntimeException("NF"));
     }
 
     @Override
     @Transactional
-    public UserResponseDTO updateProfile(UserProfileRequest request) {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        Long userId;
-        try {
-            userId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
-        } catch (NumberFormatException e) {
-            throw new RuntimeException("Authentication failed: invalid user principal");
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        authMapper.updateUserFromRequest(request, user);
-        
+    public UserResponseDTO updateProfile(UserProfileRequest req) {
+        Long userId = getAuthUserId();
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("NF"));
+        authMapper.updateUserFromRequest(req, user);
         return authMapper.mapToResponse(userRepository.save(user));
     }
 
-	public UserResponseDTO getUserById(Long id) {
-	    return userRepository.findById(id)
-	            .map(authMapper::mapToResponse)
-	            .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-	}
-
-	public java.util.List<UserResponseDTO> getAllUsers() {
-		return userRepository.findAll().stream()
-                .map(authMapper::mapToResponse)
-                .collect(java.util.stream.Collectors.toList());
-	}
-
-    @Override
-    public PageResponseDTO<UserResponseDTO> getAllUsersPaginated(int page, int size, String query) {
-        Page<com.group2.auth_service.entity.User> userPage = userRepository.findAllCustomersPaginated(query, PageRequest.of(page, size));
-        java.util.List<UserResponseDTO> content = userPage.getContent().stream()
-                .map(authMapper::mapToResponse)
-                .collect(java.util.stream.Collectors.toList());
-
-        return new PageResponseDTO<>(
-            content,
-            userPage.getNumber(),
-            userPage.getSize(),
-            userPage.getTotalElements(),
-            userPage.getTotalPages(),
-            userPage.isLast()
-        );
+    private Long getAuthUserId() {
+        Object p = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (p instanceof Long) return (Long) p;
+        try { return Long.valueOf(p.toString()); } catch (Exception e) { throw new RuntimeException("FAIL"); }
     }
 
+	public UserResponseDTO getUserById(Long id) { return userRepository.findById(id).map(authMapper::mapToResponse).orElseThrow(() -> new RuntimeException("NF")); }
+	public java.util.List<UserResponseDTO> getAllUsers() { return userRepository.findAll().stream().map(authMapper::mapToResponse).toList(); }
+
+    @Override
+    public PageResponseDTO<UserResponseDTO> getAllUsersPaginated(int p, int s, String q) {
+        Page<User> pg = userRepository.findAllCustomersPaginated(q, PageRequest.of(p, s));
+        return new PageResponseDTO<>(pg.getContent().stream().map(authMapper::mapToResponse).toList(), pg.getNumber(), pg.getSize(), pg.getTotalElements(), pg.getTotalPages(), pg.isLast());
+    }
 }

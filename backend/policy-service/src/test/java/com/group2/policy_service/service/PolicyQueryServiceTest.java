@@ -4,7 +4,10 @@ import com.group2.policy_service.service.impl.PolicyQueryServiceImpl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
@@ -22,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.group2.policy_service.dto.PolicyResponseDTO;
 import com.group2.policy_service.dto.PolicyStatsDTO;
 import com.group2.policy_service.dto.UserPolicyResponseDTO;
+import com.group2.policy_service.dto.PageResponseDTO;
 import com.group2.policy_service.entity.Policy;
 import com.group2.policy_service.entity.PolicyType;
 import com.group2.policy_service.entity.UserPolicy;
@@ -33,17 +37,10 @@ import com.group2.policy_service.util.PolicyMapper;
 @ExtendWith(MockitoExtension.class)
 public class PolicyQueryServiceTest {
 
-    @Mock
-    private PolicyRepository policyRepository;
-
-    @Mock
-    private UserPolicyRepository userPolicyRepository;
-
-    @Mock
-    private PolicyTypeRepository policyTypeRepository;
-
-    @Mock
-    private PolicyMapper mapper;
+    @Mock private PolicyRepository policyRepository;
+    @Mock private UserPolicyRepository userPolicyRepository;
+    @Mock private PolicyTypeRepository policyTypeRepository;
+    @Mock private PolicyMapper mapper;
 
     @InjectMocks
     private PolicyQueryServiceImpl policyQueryService;
@@ -56,7 +53,6 @@ public class PolicyQueryServiceTest {
         mockPolicy = new Policy();
         mockPolicy.setId(10L);
         mockPolicy.setPolicyName("Health Plan");
-        mockPolicy.setDurationInMonths(12);
 
         mockUserPolicy = new UserPolicy();
         mockUserPolicy.setId(5L);
@@ -68,60 +64,88 @@ public class PolicyQueryServiceTest {
     void testGetPoliciesByUserId() {
         when(userPolicyRepository.findByUserId(100L)).thenReturn(Collections.singletonList(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
-
         List<UserPolicyResponseDTO> result = policyQueryService.getPoliciesByUserId(100L);
-
         assertEquals(1, result.size());
+    }
+
+    @Test
+    void testSearchPolicies() {
+        org.springframework.data.domain.Page<Policy> page = new org.springframework.data.domain.PageImpl<>(Collections.singletonList(mockPolicy));
+        when(policyRepository.searchPolicies(any(), any(), any())).thenReturn(page);
+        when(mapper.mapToPolicyResponse(any())).thenReturn(new PolicyResponseDTO());
+        assertNotNull(policyQueryService.searchPolicies("cat", "q", 0, 10));
+    }
+
+    @Test
+    void testGetPoliciesByUserIdPaginated() {
+        org.springframework.data.domain.Page<UserPolicy> page = new org.springframework.data.domain.PageImpl<>(Collections.singletonList(mockUserPolicy));
+        when(userPolicyRepository.findByUserIdAndStatus(anyLong(), any(), any())).thenReturn(page);
+        when(userPolicyRepository.findByUserId(anyLong(), any())).thenReturn(page);
+        when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
+        
+        assertNotNull(policyQueryService.getPoliciesByUserIdPaginated(1L, "ACTIVE", 0, 10));
+        assertNotNull(policyQueryService.getPoliciesByUserIdPaginated(1L, "ALL", 0, 10));
     }
 
     @Test
     void testGetAllPolicies() {
         when(policyRepository.findByActiveTrue()).thenReturn(Collections.singletonList(mockPolicy));
         when(mapper.mapToPolicyResponse(any())).thenReturn(new PolicyResponseDTO());
-
-        List<PolicyResponseDTO> result = policyQueryService.getAllPolicies();
-
-        assertEquals(1, result.size());
+        assertEquals(1, policyQueryService.getAllPolicies().size());
     }
 
     @Test
     void testGetAllPolicyTypes() {
-        when(policyTypeRepository.findAll()).thenReturn(Arrays.asList(new PolicyType(), new PolicyType()));
-
-        List<PolicyType> types = policyQueryService.getAllPolicyTypes();
-
-        assertEquals(2, types.size());
+        when(policyTypeRepository.findAll()).thenReturn(Arrays.asList(new PolicyType()));
+        assertEquals(1, policyQueryService.getAllPolicyTypes().size());
     }
 
     @Test
     void testGetPolicyStats() {
         when(policyRepository.count()).thenReturn(15L);
-        when(userPolicyRepository.sumPremiumAmount()).thenReturn(5000.0);
-
+        when(userPolicyRepository.sumPremiumAmount()).thenReturn(null);
         PolicyStatsDTO stats = policyQueryService.getPolicyStats();
-
         assertEquals(15L, stats.getTotalPolicies());
-        assertEquals(5000.0, stats.getTotalRevenue());
+        assertEquals(0.0, stats.getTotalRevenue());
+        
+        when(userPolicyRepository.sumPremiumAmount()).thenReturn(5000.0);
+        assertEquals(5000.0, policyQueryService.getPolicyStats().getTotalRevenue());
     }
 
     @Test
     void testGetPolicyById() {
         when(policyRepository.findById(10L)).thenReturn(Optional.of(mockPolicy));
         when(mapper.mapToPolicyResponse(any())).thenReturn(new PolicyResponseDTO());
-
-        PolicyResponseDTO result = policyQueryService.getPolicyById(10L);
-
-        assertNotNull(result);
+        assertNotNull(policyQueryService.getPolicyById(10L));
+        
+        when(policyRepository.findById(2L)).thenReturn(Optional.empty());
+        assertThrows(RuntimeException.class, () -> policyQueryService.getPolicyById(2L));
     }
 
     @Test
-    void testGetAllUserPolicies1() {
-        when(userPolicyRepository.findAll()).thenReturn(Collections.singletonList(mockUserPolicy));
+    void testGetUserPolicyById() {
+        when(userPolicyRepository.findById(1L)).thenReturn(Optional.of(mockUserPolicy));
         when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
-
-        List<UserPolicyResponseDTO> result = policyQueryService.getAllUserPolicies();
-
-        assertEquals(1, result.size());
+        assertNotNull(policyQueryService.getUserPolicyById(1L));
+        
+        when(userPolicyRepository.findById(2L)).thenReturn(Optional.empty());
+        assertThrows(RuntimeException.class, () -> policyQueryService.getUserPolicyById(2L));
     }
 
+    @Test
+    void testGetAllUserPolicies() {
+        when(userPolicyRepository.findAll()).thenReturn(Collections.singletonList(mockUserPolicy));
+        when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
+        assertEquals(1, policyQueryService.getAllUserPolicies().size());
+    }
+
+    @Test
+    void testGetPoliciesByUserIdPaginated_NullStatus() {
+        org.springframework.data.domain.Page<UserPolicy> page = new org.springframework.data.domain.PageImpl<>(Collections.singletonList(mockUserPolicy));
+        when(userPolicyRepository.findByUserId(anyLong(), any())).thenReturn(page);
+        when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
+        
+        assertNotNull(policyQueryService.getPoliciesByUserIdPaginated(1L, null, 0, 10));
+        assertNotNull(policyQueryService.getPoliciesByUserIdPaginated(1L, "", 0, 10));
+    }
 }

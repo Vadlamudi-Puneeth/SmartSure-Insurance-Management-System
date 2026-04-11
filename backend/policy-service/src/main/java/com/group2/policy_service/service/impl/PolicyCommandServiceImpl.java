@@ -1,37 +1,20 @@
 package com.group2.policy_service.service.impl;
 
 import com.group2.policy_service.service.IPolicyCommandService;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-
+import java.util.Optional;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import com.group2.policy_service.config.RabbitMQConfig;
-import com.group2.policy_service.dto.PolicyCancellationEvent;
-import com.group2.policy_service.dto.PolicyRequestDTO;
-import com.group2.policy_service.dto.PolicyResponseDTO;
-import com.group2.policy_service.dto.UserPolicyResponseDTO;
-import com.group2.policy_service.dto.EmailRequest;
-import com.group2.policy_service.dto.NotificationEvent;
-import com.group2.policy_service.entity.Policy;
-import com.group2.policy_service.entity.PolicyStatus;
-import com.group2.policy_service.entity.PolicyType;
-import com.group2.policy_service.entity.UserPolicy;
-import com.group2.policy_service.repository.PolicyRepository;
-import com.group2.policy_service.repository.PolicyTypeRepository;
-import com.group2.policy_service.repository.UserPolicyRepository;
+import com.group2.policy_service.dto.*;
+import com.group2.policy_service.entity.*;
+import com.group2.policy_service.repository.*;
 import com.group2.policy_service.util.PolicyMapper;
-import com.group2.policy_service.feign.AuthClient;
-import com.group2.policy_service.feign.NotificationClient;
-import com.group2.policy_service.feign.UserDTO;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.group2.policy_service.feign.*;
 
 @Service
 public class PolicyCommandServiceImpl implements IPolicyCommandService {
@@ -43,15 +26,10 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
     private final AsyncNotificationService asyncNotificationService;
     private final RabbitTemplate rabbitTemplate;
     private final AuthClient authClient;
-    
-    private static final Logger log = LoggerFactory.getLogger(PolicyCommandServiceImpl.class);
 
-    public PolicyCommandServiceImpl(PolicyRepository policyRepository,
-                               UserPolicyRepository userPolicyRepository,
-                               PolicyTypeRepository policyTypeRepository,
-                               PolicyMapper mapper,
-                               AsyncNotificationService asyncNotificationService,
-                               RabbitTemplate rabbitTemplate,
+    public PolicyCommandServiceImpl(PolicyRepository policyRepository, UserPolicyRepository userPolicyRepository,
+                               PolicyTypeRepository policyTypeRepository, PolicyMapper mapper,
+                               AsyncNotificationService asyncNotificationService, RabbitTemplate rabbitTemplate,
                                AuthClient authClient) {
         this.policyRepository = policyRepository;
         this.userPolicyRepository = userPolicyRepository;
@@ -62,184 +40,113 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         this.authClient = authClient;
     }
 
+    private void notifyUser(Long userId, NotificationTask task) {
+        try {
+            Optional.ofNullable(authClient.getUserById(userId))
+                .filter(u -> u.getEmail() != null)
+                .ifPresent(u -> task.run(u.getEmail(), u.getName()));
+        } catch (Exception e) {}
+    }
+
+    @FunctionalInterface
+    interface NotificationTask { void run(String email, String name); }
+
+    private Long getUserId() {
+        Object p = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return Long.parseLong(String.valueOf(p));
+    }
+
     @Transactional
     @CacheEvict(value = {"user_policies", "policy_stats"}, allEntries = true)
     public UserPolicyResponseDTO purchasePolicy(Long policyId) {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        Long userId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
+        Long userId = getUserId();
+        Policy policy = policyRepository.findById(policyId).orElseThrow(() -> new RuntimeException("Policy not found"));
 
-        Policy policy = policyRepository.findById(policyId)
-                .orElseThrow(() -> new RuntimeException("Policy not found"));
-
-        if (userPolicyRepository.findByUserId(userId).stream()
+        boolean exists = userPolicyRepository.findByUserId(userId).stream()
                 .anyMatch(up -> up.getPolicy().getId().equals(policyId) && 
-                        (up.getStatus() == PolicyStatus.ACTIVE || 
-                         up.getStatus() == PolicyStatus.PENDING_CANCELLATION))) {
-            throw new RuntimeException("You already have an active or pending subscription for this policy.");
-        }
+                        (up.getStatus() == PolicyStatus.ACTIVE || up.getStatus() == PolicyStatus.PENDING_CANCELLATION));
+        if (exists) throw new RuntimeException("Exists");
 
-        UserPolicy userPolicy = new UserPolicy();
-        userPolicy.setUserId(userId);
-        userPolicy.setPolicy(policy);
-        userPolicy.setStatus(PolicyStatus.ACTIVE);
-        userPolicy.setPremiumAmount(policy.getPremiumAmount());
-        userPolicy.setStartDate(LocalDate.now());
-        userPolicy.setEndDate(LocalDate.now().plusMonths(policy.getDurationInMonths()));
-        userPolicy.setOutstandingBalance(policy.getPremiumAmount());
-        userPolicy.setNextDueDate(LocalDate.now().plusMonths(1));
-        userPolicy.setCoverageAmount(policy.getCoverageAmount());
+        UserPolicy up = new UserPolicy();
+        up.setUserId(userId); up.setPolicy(policy); up.setStatus(PolicyStatus.ACTIVE);
+        up.setPremiumAmount(policy.getPremiumAmount());
+        up.setStartDate(LocalDate.now()); up.setEndDate(LocalDate.now().plusMonths(policy.getDurationInMonths()));
+        up.setOutstandingBalance(policy.getPremiumAmount());
+        up.setCoverageAmount(policy.getCoverageAmount());
+        userPolicyRepository.save(up);
 
-        userPolicyRepository.save(userPolicy);
-
-        try {
-            UserDTO user = authClient.getUserById(userId);
-            if (user != null && user.getEmail() != null) {
-                // Send Purchase Notification (Asynchronous)
-                asyncNotificationService.sendPurchaseNotification(user.getEmail(), user.getName(), policy.getPolicyName(), userPolicy.getPremiumAmount(), userPolicy.getCoverageAmount(), userPolicy.getEndDate());
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch user for purchase notification: {}", e.getMessage());
-        }
-
-        return mapper.mapToUserPolicyResponse(userPolicy);
+        notifyUser(userId, (email, name) -> asyncNotificationService.sendPurchaseNotification(email, name, policy.getPolicyName(), up.getPremiumAmount(), up.getCoverageAmount(), up.getEndDate()));
+        return mapper.mapToUserPolicyResponse(up);
     }
 
     @Transactional
     @CacheEvict(value = "user_policies", allEntries = true)
-    public UserPolicyResponseDTO requestCancellation(Long userPolicyId, String reason) {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        Long currentUserId = (principal instanceof Long) ? (Long) principal : Long.parseLong(principal.toString());
+    public UserPolicyResponseDTO requestCancellation(Long upId, String reason) {
+        Long userId = getUserId();
+        UserPolicy up = userPolicyRepository.findById(upId).orElseThrow(() -> new RuntimeException("Not found"));
+        if (!up.getUserId().equals(userId)) throw new RuntimeException("Security");
+        if (up.getStatus() != PolicyStatus.ACTIVE) throw new RuntimeException("Status");
 
-        UserPolicy userPolicy = userPolicyRepository.findById(userPolicyId)
-                .orElseThrow(() -> new RuntimeException("Policy record not found"));
+        up.setStatus(PolicyStatus.PENDING_CANCELLATION);
+        up.setCancellationReason(reason);
+        userPolicyRepository.save(up);
 
-        if (!userPolicy.getUserId().equals(currentUserId)) {
-            throw new RuntimeException("Security Violation: Ownership mismatch.");
-        }
-
-        if (userPolicy.getStatus() != PolicyStatus.ACTIVE) {
-            throw new RuntimeException("Cannot cancel: Policy status is " + userPolicy.getStatus());
-        }
-
-        userPolicy.setStatus(PolicyStatus.PENDING_CANCELLATION);
-        userPolicy.setCancellationReason(reason);
-        userPolicyRepository.save(userPolicy);
-
-        try {
-            UserDTO user = authClient.getUserById(currentUserId);
-            if (user != null && user.getEmail() != null) {
-                // Send Cancellation Request Notification (Asynchronous)
-                asyncNotificationService.sendCancellationRequestNotification(user.getEmail(), user.getName(), userPolicy.getPolicy().getPolicyName());
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch user for cancellation notification: {}", e.getMessage());
-        }
-
-        // Saga Trigger (RabbitMQ - Optional for STS users)
-        try {
-            PolicyCancellationEvent event = new PolicyCancellationEvent(
-                    userPolicy.getId(),
-                    userPolicy.getUserId(),
-                    LocalDateTime.now()
-            );
-            rabbitTemplate.convertAndSend(RabbitMQConfig.POLICY_EXCHANGE, RabbitMQConfig.CANCELLATION_ROUTING_KEY, event);
-        } catch (Exception e) {
-            log.warn("⚠️ RabbitMQ saga event failed: {}", e.getMessage());
-        }
-
-        return mapper.mapToUserPolicyResponse(userPolicy);
+        notifyUser(userId, (email, name) -> asyncNotificationService.sendCancellationRequestNotification(email, name, up.getPolicy().getPolicyName()));
+        try { rabbitTemplate.convertAndSend(RabbitMQConfig.POLICY_EXCHANGE, RabbitMQConfig.CANCELLATION_ROUTING_KEY, new PolicyCancellationEvent(up.getId(), up.getUserId(), LocalDateTime.now())); } catch (Exception e) {}
+        return mapper.mapToUserPolicyResponse(up);
     }
 
     @Transactional
     @CacheEvict(value = "user_policies", allEntries = true)
-    public UserPolicyResponseDTO approveCancellation(Long userPolicyId) {
-        UserPolicy userPolicy = userPolicyRepository.findById(userPolicyId)
-                .orElseThrow(() -> new RuntimeException("Policy not found"));
+    public UserPolicyResponseDTO approveCancellation(Long upId) {
+        UserPolicy up = userPolicyRepository.findById(upId).orElseThrow(() -> new RuntimeException("Not found"));
+        if ((up.getOutstandingBalance() != null ? up.getOutstandingBalance() : 0.0) > 0) throw new RuntimeException("Balance");
 
-        if (userPolicy.getOutstandingBalance() != null && userPolicy.getOutstandingBalance() > 0) {
-            throw new RuntimeException("Outstanding balance exists: ₹" + userPolicy.getOutstandingBalance());
-        }
+        up.setStatus(PolicyStatus.CANCELLED);
+        userPolicyRepository.save(up);
 
-        userPolicy.setStatus(PolicyStatus.CANCELLED);
-        userPolicyRepository.save(userPolicy);
-
-        try {
-            UserDTO user = authClient.getUserById(userPolicy.getUserId());
-            if (user != null && user.getEmail() != null) {
-                // Send Cancellation Approval Notification (Asynchronous)
-                asyncNotificationService.sendCancellationApprovalNotification(user.getEmail(), user.getName(), userPolicy.getPolicy().getPolicyName());
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch user for cancellation approval notification: {}", e.getMessage());
-        }
-
-        return mapper.mapToUserPolicyResponse(userPolicy);
+        notifyUser(up.getUserId(), (email, name) -> asyncNotificationService.sendCancellationApprovalNotification(email, name, up.getPolicy().getPolicyName()));
+        return mapper.mapToUserPolicyResponse(up);
     }
 
     @Transactional
     @CacheEvict(value = {"policies", "policy_stats"}, allEntries = true)
     public PolicyResponseDTO createPolicy(PolicyRequestDTO dto) {
-        PolicyType type = policyTypeRepository.findById(dto.getPolicyTypeId())
-                .orElseThrow(() -> new RuntimeException("Type not found"));
-
-        Policy policy = new Policy();
-        policy.setPolicyName(dto.getPolicyName());
-        policy.setDescription(dto.getDescription());
-        policy.setPremiumAmount(dto.getPremiumAmount());
-        policy.setDurationInMonths(dto.getDurationInMonths());
-        policy.setPolicyType(type);
-        policy.setActive(true);
-
-        policyRepository.save(policy);
-        return mapper.mapToPolicyResponse(policy);
+        PolicyType type = policyTypeRepository.findById(dto.getPolicyTypeId()).orElseThrow(() -> new RuntimeException("Type"));
+        Policy p = new Policy();
+        p.setPolicyName(dto.getPolicyName()); p.setDescription(dto.getDescription());
+        p.setPremiumAmount(dto.getPremiumAmount()); p.setDurationInMonths(dto.getDurationInMonths());
+        p.setPolicyType(type); p.setActive(true);
+        policyRepository.save(p);
+        return mapper.mapToPolicyResponse(p);
     }
 
     @Transactional
     @CacheEvict(value = "policies", allEntries = true)
     public PolicyResponseDTO updatePolicy(Long id, PolicyRequestDTO dto) {
-        Policy policy = policyRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Policy not found"));
-
-        policy.setPolicyName(dto.getPolicyName());
-        policy.setDescription(dto.getDescription());
-        policy.setPremiumAmount(dto.getPremiumAmount());
-        policy.setDurationInMonths(dto.getDurationInMonths());
-
-        if (dto.getPolicyTypeId() != null) {
-            PolicyType type = policyTypeRepository.findById(dto.getPolicyTypeId()).get();
-            policy.setPolicyType(type);
-        }
-
-        policyRepository.save(policy);
-        return mapper.mapToPolicyResponse(policy);
+        Policy p = policyRepository.findById(id).orElseThrow(() -> new RuntimeException("Not found"));
+        p.setPolicyName(dto.getPolicyName()); p.setPremiumAmount(dto.getPremiumAmount());
+        p.setDurationInMonths(dto.getDurationInMonths());
+        if (dto.getPolicyTypeId() != null) p.setPolicyType(policyTypeRepository.findById(dto.getPolicyTypeId()).get());
+        policyRepository.save(p);
+        return mapper.mapToPolicyResponse(p);
     }
 
     @Transactional
-    @CacheEvict(value = "policies", allEntries = true)
     public void deletePolicy(Long id) {
-        Policy policy = policyRepository.findById(id).orElseThrow();
-        policy.setActive(false);
-        policyRepository.save(policy);
+        Policy p = policyRepository.findById(id).orElseThrow();
+        p.setActive(false);
+        policyRepository.save(p);
     }
 
     @Transactional
     @CacheEvict(value = "user_policies", allEntries = true)
     public UserPolicyResponseDTO payPremium(Long id, Double amount) {
-        UserPolicy userPolicy = userPolicyRepository.findById(id).orElseThrow();
-        double currentBalance = userPolicy.getOutstandingBalance() != null ? userPolicy.getOutstandingBalance() : 0.0;
-        userPolicy.setOutstandingBalance(Math.max(0, currentBalance - amount));
-        userPolicyRepository.save(userPolicy);
-
-        try {
-            UserDTO user = authClient.getUserById(userPolicy.getUserId());
-            if (user != null && user.getEmail() != null) {
-                // Send Payment Confirmation Email (Asynchronous)
-                asyncNotificationService.sendPaymentNotification(user.getEmail(), user.getName(), userPolicy.getPolicy().getPolicyName(), amount, userPolicy.getOutstandingBalance());
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch user for payment notification: {}", e.getMessage());
-        }
-
-        return mapper.mapToUserPolicyResponse(userPolicy);
+        UserPolicy up = userPolicyRepository.findById(id).orElseThrow();
+        double balance = up.getOutstandingBalance() != null ? up.getOutstandingBalance() : 0.0;
+        up.setOutstandingBalance(Math.max(0, balance - amount));
+        userPolicyRepository.save(up);
+        notifyUser(up.getUserId(), (email, name) -> asyncNotificationService.sendPaymentNotification(email, name, up.getPolicy().getPolicyName(), amount, up.getOutstandingBalance()));
+        return mapper.mapToUserPolicyResponse(up);
     }
 }

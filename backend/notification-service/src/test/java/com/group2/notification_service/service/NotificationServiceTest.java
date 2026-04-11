@@ -17,6 +17,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
 
 import com.group2.notification_service.entity.Otp;
 import com.group2.notification_service.exception.OtpException;
@@ -29,6 +31,7 @@ public class NotificationServiceTest {
 
     @Mock private OtpRepository otpRepository;
     @Mock private JavaMailSender javaMailSender;
+    @Mock private RestTemplate restTemplate;
 
     @InjectMocks
     private NotificationServiceImpl notificationService;
@@ -38,6 +41,24 @@ public class NotificationServiceTest {
         ReflectionTestUtils.setField(notificationService, "apiKey", "test-api-key");
         ReflectionTestUtils.setField(notificationService, "senderEmail", "sender@test.com");
         ReflectionTestUtils.setField(notificationService, "smtpUsername", "smtp@test.com");
+        ReflectionTestUtils.setField(notificationService, "restTemplate", restTemplate);
+    }
+
+    @Test
+    void testSendOtp_Success() {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenReturn("OK");
+        
+        notificationService.sendOtp("test@test.com");
+        
+        verify(otpRepository, times(1)).deleteByEmail("test@test.com");
+        verify(otpRepository, times(1)).save(any(Otp.class));
+        verify(restTemplate, times(1)).postForObject(anyString(), any(HttpEntity.class), eq(String.class));
+    }
+
+    @Test
+    void testSendOtp_RestFailure() {
+        when(restTemplate.postForObject(anyString(), any(), eq(String.class))).thenThrow(new RuntimeException("API Error"));
+        assertThrows(RuntimeException.class, () -> notificationService.sendOtp("test@test.com"));
     }
 
     @Test
@@ -111,12 +132,5 @@ public class NotificationServiceTest {
     void testSendGeneralEmail_Failure() {
         when(javaMailSender.createMimeMessage()).thenThrow(new RuntimeException("Mail server down"));
         assertThrows(RuntimeException.class, () -> notificationService.sendGeneralEmail("to@test.com", "S", "B"));
-    }
-    
-    @Test
-    void testSendOtp_Failure_DuetoRestTemplate() {
-        // We do not mock RestTemplate since it's instantiated inside NotificationServiceImpl
-        // Thus, RestTemplate will try to execute the network call to Brevo API and throw an Exception
-        assertThrows(RuntimeException.class, () -> notificationService.sendOtp("test@test.com"));
     }
 }

@@ -1,6 +1,8 @@
 package com.group2.claims_service.controller;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -23,6 +25,7 @@ import com.group2.claims_service.dto.ClaimRequestDTO;
 import com.group2.claims_service.dto.ClaimResponseDTO;
 import com.group2.claims_service.dto.ClaimStatsDTO;
 import com.group2.claims_service.dto.ClaimStatusUpdateDTO;
+import com.group2.claims_service.entity.ClaimDocument;
 import com.group2.claims_service.service.IClaimService;
 
 @ExtendWith(MockitoExtension.class)
@@ -147,4 +150,71 @@ public class ClaimControllerTest {
         assertEquals(200, res.getStatusCode().value());
         assertEquals(10, res.getBody().getTotalClaims());
     }
+    @Test
+    void testGetAllClaims() {
+        when(claimService.getAllClaims()).thenReturn(Collections.singletonList(responseDTO));
+        ResponseEntity<List<ClaimResponseDTO>> res = claimController.getAllClaims();
+        assertEquals(200, res.getStatusCode().value());
+        assertEquals(1, res.getBody().size());
+    }
+
+    @Test
+    void testGetAllClaimsPaginated() {
+        com.group2.claims_service.dto.PageResponseDTO<ClaimResponseDTO> page = new com.group2.claims_service.dto.PageResponseDTO<>();
+        when(claimService.getAllClaimsPaginated(0, 10, "")).thenReturn(page);
+        ResponseEntity<com.group2.claims_service.dto.PageResponseDTO<ClaimResponseDTO>> res = claimController.getAllClaimsPaginated(0, 10, "");
+        assertEquals(200, res.getStatusCode().value());
+        assertEquals(page, res.getBody());
+    }
+
+    @Test
+    void testGetClaimsByUserIdPaginated() {
+        com.group2.claims_service.dto.PageResponseDTO<ClaimResponseDTO> page = new com.group2.claims_service.dto.PageResponseDTO<>();
+        when(claimService.getClaimsByUserIdPaginated(1L, 0, 10, "")).thenReturn(page);
+        ResponseEntity<com.group2.claims_service.dto.PageResponseDTO<ClaimResponseDTO>> res = claimController.getClaimsByUserIdPaginated(1L, 0, 10, "");
+        assertEquals(200, res.getStatusCode().value());
+        assertEquals(page, res.getBody());
+    }
+
+    @Test
+    void downloadDocument_usesOctetStreamAndAttachmentWhenTypeMissing() {
+        ClaimDocument doc = new ClaimDocument();
+        doc.setFileUrl("proof.pdf");
+        doc.setDocumentType(null);
+        doc.setFileData(new byte[] { 1, 2, 3 });
+        when(claimService.getClaimDocument(5L)).thenReturn(doc);
+
+        ResponseEntity<byte[]> res = claimController.downloadDocument(5L);
+        assertEquals(200, res.getStatusCode().value());
+        assertArrayEquals(doc.getFileData(), res.getBody());
+        assertTrue(res.getHeaders().getFirst("Content-Disposition").contains("attachment"));
+        assertEquals("application/octet-stream", res.getHeaders().getFirst("Content-Type"));
+    }
+
+    @Test
+    void downloadDocument_inlineForImage() {
+        ClaimDocument doc = new ClaimDocument();
+        doc.setFileUrl("pic.jpg");
+        doc.setDocumentType("image/jpeg");
+        doc.setFileData(new byte[] { 9 });
+        when(claimService.getClaimDocument(6L)).thenReturn(doc);
+
+        ResponseEntity<byte[]> res = claimController.downloadDocument(6L);
+        assertTrue(res.getHeaders().getFirst("Content-Disposition").contains("inline"));
+        assertEquals("image/jpeg", res.getHeaders().getFirst("Content-Type"));
+    }
+
+    @Test
+    void downloadDocument_attachmentForPdf() {
+        ClaimDocument doc = new ClaimDocument();
+        doc.setFileUrl("doc.pdf");
+        doc.setDocumentType("application/pdf");
+        doc.setFileData(new byte[] { 0 });
+        when(claimService.getClaimDocument(7L)).thenReturn(doc);
+
+        ResponseEntity<byte[]> res = claimController.downloadDocument(7L);
+        assertTrue(res.getHeaders().getFirst("Content-Disposition").contains("attachment"));
+        assertEquals("application/pdf", res.getHeaders().getFirst("Content-Type"));
+    }
 }
+

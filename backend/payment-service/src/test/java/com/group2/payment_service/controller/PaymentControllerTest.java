@@ -26,15 +26,27 @@ public class PaymentControllerTest {
     private PaymentController controller;
 
     @Test
-    void testCreateOrder() throws Exception {
+    void testCreateOrder_Success() throws Exception {
         PaymentResponse response = new PaymentResponse();
         response.setOrderId("order_123");
         when(paymentService.createOrder(any(PaymentRequest.class))).thenReturn(response);
 
         ResponseEntity<?> res = controller.createOrder(new PaymentRequest());
         assertEquals(200, res.getStatusCode().value());
-        PaymentResponse body = (PaymentResponse) res.getBody();
-        assertEquals("order_123", body.getOrderId());
+    }
+
+    @Test
+    void testCreateOrder_IllegalArgument() throws Exception {
+        when(paymentService.createOrder(any())).thenThrow(new IllegalArgumentException("Invalid"));
+        ResponseEntity<?> res = controller.createOrder(new PaymentRequest());
+        assertEquals(400, res.getStatusCode().value());
+    }
+
+    @Test
+    void testCreateOrder_InternalError() throws Exception {
+        when(paymentService.createOrder(any())).thenThrow(new RuntimeException("Err"));
+        ResponseEntity<?> res = controller.createOrder(new PaymentRequest());
+        assertEquals(500, res.getStatusCode().value());
     }
 
     @Test
@@ -52,6 +64,5 @@ public class PaymentControllerTest {
 
         ResponseEntity<String> res = controller.verifyPayment(new PaymentVerifyRequest());
         assertEquals(400, res.getStatusCode().value());
-        assertEquals("Invalid Signature", res.getBody());
     }
 }

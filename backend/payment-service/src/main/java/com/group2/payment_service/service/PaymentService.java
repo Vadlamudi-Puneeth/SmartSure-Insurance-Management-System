@@ -59,10 +59,7 @@ public class PaymentService {
             System.out.println("⚠️ PaymentService.createOrder: Policy ID " + request.getPolicyId() + " not found in local policy table; proceeding anyway.");
         }
 
-        // If the local payment service has policy table entries, validate if present to provide early errors.
-        if (policyRepository.existsById(request.getPolicyId()) == false) {
-            System.out.println("⚠️ Policy ID " + request.getPolicyId() + " not found in payment-service policy table; proceeding to create order anyway.");
-        }
+
 
         try {
             RazorpayClient razorpayClient = new RazorpayClient(razorpayKeyId, razorpayKeySecret);

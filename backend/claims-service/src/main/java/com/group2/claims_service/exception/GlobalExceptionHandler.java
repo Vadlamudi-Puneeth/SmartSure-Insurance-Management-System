@@ -22,6 +22,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(ClaimNotFoundException.class)
+    public ResponseEntity<ErrorDetails> handleClaimNotFoundException(ClaimNotFoundException exception,
+                                                                    WebRequest webRequest) {
+        log.warn("Claim not found: {}", exception.getMessage());
+        ErrorDetails errorDetails = new ErrorDetails(
+                LocalDateTime.now(),
+                exception.getMessage(),
+                webRequest.getDescription(false),
+                "NOT_FOUND"
+        );
+        return new ResponseEntity<>(errorDetails, HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(ClaimException.class)
     public ResponseEntity<ErrorDetails> handleClaimException(ClaimException exception,
                                                                     WebRequest webRequest) {
