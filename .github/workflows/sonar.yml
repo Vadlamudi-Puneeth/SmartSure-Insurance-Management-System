@@ -1,0 +1,72 @@
+name: SonarCloud Analysis
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  sonarcloud:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full clone for SonarCloud blame data
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # ── Build & Test each microservice (generates JaCoCo XML reports) ──
+      - name: Build & Test - eureka-server
+        run: mvn -B clean verify -f backend/eureka-server/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - config-server
+        run: mvn -B clean verify -f backend/config-server/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - api-gateway
+        run: mvn -B clean verify -f backend/api-gateway/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - auth-service
+        run: mvn -B clean verify -f backend/auth-service/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - admin-service
+        run: mvn -B clean verify -f backend/admin-service/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - claims-service
+        run: mvn -B clean verify -f backend/claims-service/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - policy-service
+        run: mvn -B clean verify -f backend/policy-service/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - payment-service
+        run: mvn -B clean verify -f backend/payment-service/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      - name: Build & Test - notification-service
+        run: mvn -B clean verify -f backend/notification-service/pom.xml -Dspring.cloud.config.enabled=false
+        continue-on-error: true
+
+      # ── Verify JaCoCo reports exist ──
+      - name: List JaCoCo reports
+        run: find backend -name "jacoco.xml" -type f 2>/dev/null || echo "No JaCoCo reports found"
+
+      # ── SonarCloud Scan ──
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
