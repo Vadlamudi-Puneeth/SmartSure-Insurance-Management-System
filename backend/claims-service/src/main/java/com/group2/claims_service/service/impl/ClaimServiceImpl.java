@@ -66,7 +66,7 @@ public class ClaimServiceImpl implements IClaimService {
             if (u != null && u.getEmail() != null) {
                 String polName = java.util.Optional.ofNullable(policyClient.getUserPolicyById(saved.getPolicyId())).map(UserPolicyDTO::getPolicyName).orElse("Your Policy");
                 String sub = "SmartSure: Claim Submitted";
-                String body = String.format("Hello %s, Claim for %s received. Status: Review.", u.getName(), polName);
+                String body = buildClaimSubmittedEmailHtml(u.getName(), polName);
                 
                 try {
                     notificationClient.sendEmail(new EmailRequest(u.getEmail(), sub, body));
@@ -137,7 +137,7 @@ public class ClaimServiceImpl implements IClaimService {
                 UserDTO u = authClient.getUserById(c.getUserId());
                 if (u != null && u.getEmail() != null) {
                     String sub = "Claim Update: " + target;
-                    String body = "Claim #" + c.getId() + " is " + target + ". Remark: " + r;
+                    String body = buildClaimStatusEmailHtml(c.getId(), target, r);
                     try {
                         notificationClient.sendEmail(new EmailRequest(u.getEmail(), sub, body));
                     } catch (Exception ex) {
@@ -146,6 +146,34 @@ public class ClaimServiceImpl implements IClaimService {
                 }
             } catch(Exception e) { log.error("Notify failed: {}", e.getMessage()); }
         }
+    }
+
+    /** Inline styles only — email clients ignore most {@code <style>} blocks. */
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private static String buildClaimSubmittedEmailHtml(String userName, String policyName) {
+        return "<p style=\"margin:0 0 14px;font-size:16px;color:#1e40af;\"><strong>Hello " + esc(userName) + ",</strong></p>"
+                + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;\">We have received your claim for <strong style=\"color:#0f172a;\">"
+                + esc(policyName) + "</strong>.</p>"
+                + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"background-color:#eff6ff;border-radius:10px;border-left:4px solid #2563eb;\">"
+                + "<tr><td style=\"padding:14px 18px;\">"
+                + "<p style=\"margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;\">Status</p>"
+                + "<p style=\"margin:0;font-size:17px;font-weight:700;color:#1e3a8a;\">Under review</p>"
+                + "</td></tr></table>"
+                + "<p style=\"margin:20px 0 0;font-size:14px;color:#64748b;\">You will receive another email when the status changes.</p>";
+    }
+
+    private static String buildClaimStatusEmailHtml(Long claimId, ClaimStatus target, String remark) {
+        String color = target == ClaimStatus.APPROVED ? "#059669" : "#dc2626";
+        String rem = remark != null && !remark.isBlank() ? remark : "—";
+        return "<p style=\"margin:0 0 12px;font-size:16px;\"><strong style=\"color:#1e40af;\">Claim update</strong></p>"
+                + "<p style=\"margin:0 0 14px;color:#334155;\">Claim <strong>#" + claimId + "</strong> is now:</p>"
+                + "<p style=\"margin:0 0 16px;padding:14px 16px;border-radius:8px;background-color:#f8fafc;font-weight:700;font-size:18px;color:"
+                + color + ";\">" + esc(String.valueOf(target)) + "</p>"
+                + "<p style=\"margin:0;font-size:14px;color:#64748b;line-height:1.5;\"><strong style=\"color:#334155;\">Remark:</strong> " + esc(rem) + "</p>";
     }
 
     private void populate(ClaimResponseDTO dto, Claim c) {

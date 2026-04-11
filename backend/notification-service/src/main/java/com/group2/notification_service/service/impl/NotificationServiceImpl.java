@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 import com.group2.notification_service.entity.Otp;
 import com.group2.notification_service.exception.OtpException;
 import com.group2.notification_service.repository.OtpRepository;
+import com.group2.notification_service.util.EmailHtmlLayout;
 
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -74,11 +75,15 @@ public class NotificationServiceImpl implements INotificationService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("api-key", apiKey);
 
+        String otpHtml = EmailHtmlLayout.build(EmailHtmlLayout.buildOtpInnerHtml(otp));
+        String htmlEscaped = EmailHtmlLayout.escapeForJson(otpHtml);
+        String emailEscaped = EmailHtmlLayout.escapeForJson(email);
+        String senderEscaped = EmailHtmlLayout.escapeForJson(senderEmail);
         String body = "{\n" +
-                "\"sender\": {\"name\": \"SmartSure\", \"email\": \"" + senderEmail + "\"},\n" +
-                "\"to\": [{\"email\": \"" + email + "\"}],\n" +
+                "\"sender\": {\"name\": \"SmartSure\", \"email\": \"" + senderEscaped + "\"},\n" +
+                "\"to\": [{\"email\": \"" + emailEscaped + "\"}],\n" +
                 "\"subject\": \"OTP Verification\",\n" +
-                "\"htmlContent\": \"<h3>Your OTP is: <b>" + otp + "</b></h3><p>Valid for 10 minutes.</p>\"\n" +
+                "\"htmlContent\": \"" + htmlEscaped + "\"\n" +
                 "}";
 
         try {
@@ -126,7 +131,7 @@ public class NotificationServiceImpl implements INotificationService {
             
             helper.setTo(to);
             helper.setSubject(subject);
-            helper.setText(body, true); // true indicates HTML
+            helper.setText(EmailHtmlLayout.build(body), true);
             helper.setFrom(smtpUsername); // CRITICAL FIX: Use SMTP auth email, not Brevo email
 
             javaMailSender.send(message);

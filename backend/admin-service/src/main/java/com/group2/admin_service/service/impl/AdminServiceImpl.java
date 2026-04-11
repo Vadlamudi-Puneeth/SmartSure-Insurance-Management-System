@@ -50,7 +50,8 @@ public class AdminServiceImpl implements IAdminService {
             if (c != null && c.getUserId() != null) {
                 UserDTO u = authClient.getUserById(c.getUserId());
                 if (u != null && u.getEmail() != null) {
-                    notificationClient.sendEmail(new EmailRequest(u.getEmail(), "Claim Reviewed", "Status: " + req.getStatus()));
+                    notificationClient.sendEmail(new EmailRequest(u.getEmail(), "SmartSure: Claim reviewed",
+                            buildClaimReviewedEmailHtml(req.getStatus(), req.getRemark())));
                 }
             }
         } catch (Exception e) { log.error("Notify fail: {}", e.getMessage()); }
@@ -146,6 +147,21 @@ public class AdminServiceImpl implements IAdminService {
         dto.setHasReviewingClaim(ucs.stream().anyMatch(c ->
                 "UNDER_REVIEW".equalsIgnoreCase(String.valueOf(c.getStatus()))));
         return dto;
+    }
+
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private static String buildClaimReviewedEmailHtml(String status, String remark) {
+        String r = remark != null && !remark.isBlank()
+                ? "<p style=\"margin:14px 0 0;font-size:14px;color:#64748b;line-height:1.5;\"><strong style=\"color:#334155;\">Remark:</strong> "
+                + esc(remark) + "</p>"
+                : "";
+        return "<p style=\"margin:0 0 12px;font-size:16px;\"><strong style=\"color:#1e40af;\">Your claim was reviewed</strong></p>"
+                + "<p style=\"margin:0;font-size:15px;color:#334155;\">New status: <strong style=\"color:#0f172a;\">" + esc(status) + "</strong></p>"
+                + r;
     }
 
     private static boolean matchesSearch(UserDTO u, String search) {
