@@ -424,6 +424,13 @@ export default function AdminClaims() {
 
   const handleUserSelect = (user: User) => { setSelectedUser(user); fetchClaims(user.id, 1); };
 
+  const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      action();
+    }
+  };
+
 
   const handleReview = async () => {
     if (!showReview || !reviewStatus) { toast.error('Please select a status'); return; }
@@ -470,8 +477,8 @@ export default function AdminClaims() {
       const res = await adminAPI.downloadClaimDocument(claimId);
       const ct = res.headers['content-type'] || 'application/octet-stream';
       const blob = new Blob([res.data], { type: ct });
-      const url = window.URL.createObjectURL(blob);
-      if (ct.startsWith('image/')) { window.open(url, '_blank'); }
+      const url = globalThis.URL.createObjectURL(blob);
+      if (ct.startsWith('image/')) { globalThis.open(url, '_blank'); }
       else {
         const a = document.createElement('a');
         a.href = url; a.download = `claim-${claimId}-document`; a.click();
@@ -633,6 +640,9 @@ export default function AdminClaims() {
                     border: `1.5px solid ${selectedUser?.id === u.id ? 'var(--color-primary)' : 'transparent'}`,
                     display: 'flex', alignItems: 'flex-start', gap: 10, transition: 'all .15s'
                   }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => handleKeyDown(e, () => handleUserSelect(u))}
                 >
                   <div className="c-avatar" style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-border)' }}>
                     <HiUser style={{ width: 18, height: 18 }} />
