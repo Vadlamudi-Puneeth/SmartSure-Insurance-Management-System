@@ -107,4 +107,14 @@ public class PolicyQueryControllerTest {
         assertEquals(200, res.getStatusCode().value());
         assertEquals(dto, res.getBody());
     }
+
+    @Test
+    void testGetAllUserPoliciesPaginated() {
+        PageResponseDTO<UserPolicyResponseDTO> page = new PageResponseDTO<>(Collections.emptyList(), 0, 10, 0L, 0, true);
+        when(queryService.getAllUserPoliciesPaginated(0, 10)).thenReturn(page);
+        
+        ResponseEntity<PageResponseDTO<UserPolicyResponseDTO>> res = controller.getAllUserPoliciesPaginated(0, 10);
+        assertEquals(200, res.getStatusCode().value());
+        assertEquals(page, res.getBody());
+    }
 }

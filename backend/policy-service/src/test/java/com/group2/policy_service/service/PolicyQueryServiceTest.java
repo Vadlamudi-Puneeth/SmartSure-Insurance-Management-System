@@ -148,4 +148,15 @@ public class PolicyQueryServiceTest {
         assertNotNull(policyQueryService.getPoliciesByUserIdPaginated(1L, null, 0, 10));
         assertNotNull(policyQueryService.getPoliciesByUserIdPaginated(1L, "", 0, 10));
     }
+
+    @Test
+    void testGetAllUserPoliciesPaginated() {
+        org.springframework.data.domain.Page<UserPolicy> page = new org.springframework.data.domain.PageImpl<>(Collections.singletonList(mockUserPolicy));
+        when(userPolicyRepository.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(page);
+        when(mapper.mapToUserPolicyResponse(any())).thenReturn(new UserPolicyResponseDTO());
+        
+        PageResponseDTO<UserPolicyResponseDTO> result = policyQueryService.getAllUserPoliciesPaginated(0, 10);
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+    }
 }
