@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { adminAPI } from '../../core/services/api';
 import {
   HiDocumentText, HiCheckCircle, HiRefresh,
-  HiSearch, HiUser, HiChevronRight, HiMail, HiPhone, HiExclamation
+  HiSearch, HiUser, HiChevronRight, HiMail, HiPhone, HiExclamation,
+  HiShieldCheck
 } from 'react-icons/hi';
 import { Badge } from '../../shared/components/UI';
 import LoadingSpinner from '../../shared/components/UI';
@@ -15,6 +16,9 @@ interface User {
   email: string;
   phone: string;
   role: string;
+  hasPendingPolicy?: boolean;
+  hasActivePolicy?: boolean;
+  policyCount?: number;
 }
 
 interface UserPolicy {
