@@ -13,11 +13,16 @@ import { useDebounce } from '../../shared/hooks/useDebounce';
    Types
 ───────────────────────────────────────────────────────────── */
 interface User {
-  id: string | number;
+  id: number;
   name: string;
   email: string;
-  phone?: string;
+  phone: string;
   role: string;
+  hasPendingPolicy?: boolean;
+  hasActivePolicy?: boolean;
+  policyCount?: number;
+  hasSubmittedClaim?: boolean;
+  hasReviewingClaim?: boolean;
 }
 
 interface Claim {
@@ -341,8 +346,6 @@ export default function AdminClaims() {
   const debouncedSearchUser = useDebounce(searchUser, 500);
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  const [fullClaimsLedger, setFullClaimsLedger] = useState<any[]>([]);
-
   const PAGE_SIZE_USERS = 5;
   const [currentUsersPage, setCurrentUsersPage] = useState(1);
   const [totalUsersPages, setTotalUsersPages] = useState(1);
@@ -365,10 +368,9 @@ export default function AdminClaims() {
   const [claimDetail, setClaimDetail] = useState<Claim | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-
   useEffect(() => {
     fetchUsers();
-  }, [debouncedSearchUser, currentUsersPage]);
+  }, [debouncedSearchUser, currentUsersPage, statusFilter]);
 
   useEffect(() => {
     if (!selectedUser) {
@@ -380,14 +382,10 @@ export default function AdminClaims() {
     if (!background) setLoadingUsers(true);
     setErrorUsers(null);
     try {
-      const [userRes, claimsRes] = await Promise.all([
-        adminAPI.getFilteredUsers(currentUsersPage - 1, PAGE_SIZE_USERS, debouncedSearchUser, 'ALL', statusFilter),
-        adminAPI.getAllClaims()
-      ]);
-      setUsers(userRes.data.content);
-      setTotalUsersPages(userRes.data.totalPages || 1);
-      setTotalUsers(userRes.data.totalElements || 0);
-      setFullClaimsLedger(claimsRes.data || []);
+      const res = await adminAPI.getFilteredUsers(currentUsersPage - 1, PAGE_SIZE_USERS, debouncedSearchUser, 'ALL', statusFilter);
+      setUsers(Array.isArray(res.data.content) ? res.data.content : []);
+      setTotalUsersPages(res.data.totalPages || 1);
+      setTotalUsers(res.data.totalElements || 0);
     } catch (err: any) {
       setErrorUsers(err.response?.data?.message || 'Failed to load users');
     } finally { setLoadingUsers(false); }
@@ -444,16 +442,10 @@ export default function AdminClaims() {
       toast.success('Claim status updated!');
       setShowReview(null); setReviewStatus(''); setReviewRemark('');
 
-      // Optimistically update local state immediately to remove blinking
-      setClaims(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
-      setGlobalClaims(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
-      setFullClaimsLedger(prev => prev.map(c => c.claimId === showReview ? { ...c, status: reviewStatus } : c));
-
-      // Fetch fresh data from backend
       if (selectedUser) fetchClaims(selectedUser.id, currentClaimsPage);
       else fetchGlobalClaims(globalClaimsPage);
       
-      fetchUsers(true); // Background sync to ensure accurate ledger
+      fetchUsers(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to review claim');
     } finally { setSubmitting(false); }
@@ -461,7 +453,7 @@ export default function AdminClaims() {
 
   const handleViewDetail = async (claimId: string | number) => {
     setShowDetail(claimId); setLoadingDetail(true);
-    const local = claims.find(c => c.claimId === claimId);
+    const local = claims.find(c => c.claimId === claimId) || globalClaims.find(c => c.claimId === claimId);
     try {
       const res = await adminAPI.getClaimStatus(claimId);
       setClaimDetail({ ...(local as Claim), ...res.data });
@@ -470,7 +462,6 @@ export default function AdminClaims() {
       setClaimDetail(local || null);
     } finally { setLoadingDetail(false); }
   };
-
 
   const handleDownloadDoc = async (claimId: string | number) => {
     try {
@@ -497,29 +488,7 @@ export default function AdminClaims() {
     }
   };
 
-  // Derived stats per user for pulse dot and labels
-  const userClaimsStats = useMemo(() => {
-    return users.reduce((acc: Record<string | number, { hasSubmitted: boolean; hasReviewing: boolean }>, user) => {
-      const uIdStr = String(user.id);
-      const uClaims = fullClaimsLedger.filter(c => String(c.userId) === uIdStr);
-      acc[uIdStr] = {
-        hasSubmitted: uClaims.some(c => c.status === 'SUBMITTED'),
-        hasReviewing: uClaims.some(c => c.status === 'UNDER_REVIEW')
-      };
-      return acc;
-    }, {});
-  }, [users, fullClaimsLedger]);
-
-  // Filter users based on statusFilter (hasSubmitted or hasReviewing)
-  const currentUsers = useMemo(() => {
-    if (statusFilter === 'ALL') return users;
-    return users.filter(u => {
-      const stats = userClaimsStats[String(u.id)];
-      if (statusFilter === 'SUBMITTED') return stats?.hasSubmitted;
-      if (statusFilter === 'UNDER_REVIEW') return stats?.hasReviewing;
-      return true;
-    });
-  }, [users, userClaimsStats, statusFilter]);
+  const currentUsers = users;
 
   const currentReviewingClaim = claims.find(c => c.claimId === showReview) || globalClaims.find(c => c.claimId === showReview);
   const statusOptions = getValidStatusOptions(currentReviewingClaim?.status);
@@ -651,9 +620,34 @@ export default function AdminClaims() {
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</p>
                     <p style={{ margin: 0, fontSize: 10, color: 'var(--color-text-secondary)' }}>{u.email}</p>
                     
-                    {(userClaimsStats[String(u.id)]?.hasSubmitted || userClaimsStats[String(u.id)]?.hasReviewing) && (
+                    {u.policyCount !== undefined && u.policyCount > 0 && (
+                      <div style={{ marginTop: 10, display: 'flex', gap: 6, alignItems: 'center', paddingBottom: 2 }}>
+                        {u.hasPendingPolicy ? (
+                          <span style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            color: '#fbbf24',
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '.08em',
+                            border: '1px solid rgba(245, 158, 11, 0.3)'
+                          }}>
+                            <div className="pulse-dot" /> PENDING
+                          </span>
+                        ) : u.hasActivePolicy ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-primary)15', color: 'var(--color-primary)', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)' }} /> Active
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {u.hasSubmittedClaim || u.hasReviewingClaim ? (
                       <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {userClaimsStats[String(u.id)]?.hasSubmitted ? (
+                        {u.hasSubmittedClaim ? (
                           <span className="blink-text" style={{ 
                             display: 'flex', alignItems: 'center', gap: 6, 
                             background: 'rgba(239, 68, 68, 0.15)', 
@@ -668,7 +662,7 @@ export default function AdminClaims() {
                           }}>
                             <div className="pulse-dot-submitted" /> SUBMITTED
                           </span>
-                        ) : userClaimsStats[String(u.id)]?.hasReviewing ? (
+                        ) : u.hasReviewingClaim ? (
                           <span style={{ 
                             display: 'flex', alignItems: 'center', gap: 6, 
                             background: 'rgba(245, 158, 11, 0.15)', 
@@ -685,7 +679,7 @@ export default function AdminClaims() {
                           </span>
                         ) : null}
                       </div>
-                    )}
+                    ) : null}
 
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8, marginTop: 10 }}>

@@ -102,6 +102,26 @@ public class PolicyQueryServiceImpl implements IPolicyQueryService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public PageResponseDTO<UserPolicyResponseDTO> getAllUserPoliciesPaginated(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<com.group2.policy_service.entity.UserPolicy> policyPage = userPolicyRepository.findAll(pageable);
+
+        List<UserPolicyResponseDTO> content = policyPage.getContent()
+                .stream()
+                .map(mapper::mapToUserPolicyResponse)
+                .collect(Collectors.toList());
+
+        return new PageResponseDTO<>(
+                content,
+                policyPage.getNumber(),
+                policyPage.getSize(),
+                policyPage.getTotalElements(),
+                policyPage.getTotalPages(),
+                policyPage.isLast()
+        );
+    }
+
     @Cacheable(value = "policies", key = "'all'")
     public List<PolicyResponseDTO> getAllPolicies() {
         return policyRepository.findByActiveTrue()

@@ -11,6 +11,7 @@ public interface IPolicyQueryService {
     List<UserPolicyResponseDTO> getPoliciesByUserId(Long userId);
     PageResponseDTO<UserPolicyResponseDTO> getPoliciesByUserIdPaginated(Long userId, String status, int page, int size);
     List<UserPolicyResponseDTO> getAllUserPolicies();
+    PageResponseDTO<UserPolicyResponseDTO> getAllUserPoliciesPaginated(int page, int size);
     List<PolicyResponseDTO> getAllPolicies();
     PageResponseDTO<PolicyResponseDTO> searchPolicies(String category, String query, int page, int size);
     List<PolicyType> getAllPolicyTypes();

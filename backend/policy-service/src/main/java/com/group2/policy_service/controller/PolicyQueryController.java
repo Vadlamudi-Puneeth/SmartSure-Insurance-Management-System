@@ -74,6 +74,14 @@ public class PolicyQueryController {
         return queryService.getAllUserPolicies();
     }
 
+    @GetMapping("/admin/user-policies/all-paginated")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<PageResponseDTO<UserPolicyResponseDTO>> getAllUserPoliciesPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(queryService.getAllUserPoliciesPaginated(page, size));
+    }
+
     @GetMapping("/admin/policies/stats")
     public ResponseEntity<PolicyStatsDTO> getPolicyStats() {
         return ResponseEntity.ok(queryService.getPolicyStats());

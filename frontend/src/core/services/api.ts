@@ -75,6 +75,8 @@ export const adminAPI = {
   getPaginatedUserPolicies: (userId: string | number, page: number, size: number) =>
     API.get(`/policy-service/api/policies/user/${userId}?page=${page}&size=${size}`),
   getAllUserPolicies: () => API.get('/policy-service/api/admin/user-policies'),
+  getAllUserPoliciesPaginated: (page: number, size: number) => 
+    API.get(`/policy-service/api/admin/user-policies/all-paginated?page=${page}&size=${size}`),
   approveCancellation: (id: string | number) => API.put(`/policy-service/api/admin/policies/user-policies/${id}/approve-cancellation`),
   getUserPolicies: (userId: string | number) => API.get(`/policy-service/api/policies/user/${userId}`),
   getAllClaims: () => API.get('/admin-service/api/admin/claims'),

@@ -314,6 +314,13 @@ export default function AdminSubscriptions() {
   const [selectedUserPolicies, setSelectedUserPolicies] = useState<UserPolicy[]>([]);
   const [loadingPolicies, setLoadingPolicies] = useState(false);
 
+  // Global subscriptions (Master Ledger)
+  const [globalPolicies, setGlobalPolicies] = useState<UserPolicy[]>([]);
+  const [globalPoliciesPage, setGlobalPoliciesPage] = useState(1);
+  const [totalGlobalPoliciesPages, setTotalGlobalPoliciesPages] = useState(1);
+  const [totalGlobalPolicies, setTotalGlobalPolicies] = useState(0);
+  const [loadingGlobal, setLoadingGlobal] = useState(false);
+
   const fetchData = async (page = 1) => {
     setLoading(true); setError(null);
     try {
@@ -342,6 +349,27 @@ export default function AdminSubscriptions() {
   useEffect(() => {
     fetchData(currentPage);
   }, [currentPage, debouncedSearch, statusFilter]);
+
+  const fetchGlobalPolicies = async (page = 1) => {
+    setLoadingGlobal(true);
+    try {
+      const res = await adminAPI.getAllUserPoliciesPaginated(page - 1, 10);
+      setGlobalPolicies(res.data.content || []);
+      setTotalGlobalPoliciesPages(res.data.totalPages || 1);
+      setTotalGlobalPolicies(res.data.totalElements || 0);
+      setGlobalPoliciesPage(page);
+    } catch (err) {
+      console.error("Failed to fetch global policies", err);
+    } finally {
+      setLoadingGlobal(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedUserId) {
+      fetchGlobalPolicies(globalPoliciesPage);
+    }
+  }, [selectedUserId, globalPoliciesPage]);
 
   const handleUserSelect = (userId: number) => {
     setSelectedUserId(userId);
@@ -557,18 +585,97 @@ export default function AdminSubscriptions() {
           {/* ── RIGHT: Detail Panel ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {!selectedUser ? (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                minHeight: 480, borderRadius: 20, border: '1.5px dashed var(--color-border)',
-                background: 'var(--color-surface)', gap: 12,
-              }}>
-                <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: .4 }}>
-                  <HiUser style={{ width: 28, height: 28, color: 'var(--color-text)' }} />
+              <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* ── Dashboard Header ── */}
+                <div style={{
+                  padding: '24px 28px',
+                  borderRadius: 20,
+                  border: '1.5px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div className="avatar-ring" style={{ width: 48, height: 48, borderRadius: 14 }}>
+                      <HiShieldCheck style={{ width: 24, height: 24, color: '#fff' }} />
+                    </div>
+                    <div>
+                      <h2 className="serif" style={{ fontSize: 24, color: 'var(--color-text)', margin: '0 0 4px' }}>Global Subscriptions</h2>
+                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>Viewing all active policy lifecycles system-wide</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => fetchGlobalPolicies(globalPoliciesPage)}
+                    disabled={loadingGlobal}
+                    className="ref-btn"
+                  >
+                    <HiRefresh className={loadingGlobal ? 'spin' : ''} style={{ width: 14, height: 14 }} />
+                    Sync Ledger
+                  </button>
                 </div>
-                <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-text)', margin: 0 }}>Select a customer</p>
-                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, opacity: .6, textAlign: 'center', maxWidth: 280 }}>
-                  Choose from the list to view their policy portfolio and manage cancellation requests.
-                </p>
+
+                {/* ── Global Subscriptions Table ── */}
+                <div className="rep-panel">
+                  <div className="rep-panel-header">
+                    <HiDocumentText style={{ width: 15, height: 15, color: 'var(--color-primary)' }} />
+                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--color-text)' }}>Master Subscriptions Ledger</span>
+                    <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-secondary)', opacity: .5 }}>{totalGlobalPolicies} Records</span>
+                  </div>
+
+                  <div style={{ overflowX: 'auto', minHeight: 300 }}>
+                    <table className="sub-table">
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left' }}>Sub ID</th>
+                          <th style={{ textAlign: 'left' }}>User ID</th>
+                          <th style={{ textAlign: 'left' }}>Policy Name</th>
+                          <th style={{ textAlign: 'left' }}>Status</th>
+                          <th style={{ textAlign: 'right', paddingRight: 24 }}>Outstanding</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loadingGlobal ? (
+                          <tr><td colSpan={5} style={{ textAlign: 'center', padding: '60px 0' }}><HiRefresh className="spin inline text-indigo-500 w-5 h-5" /> Syncing...</td></tr>
+                        ) : globalPolicies.map(p => (
+                          <tr key={p.id}>
+                            <td><span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>#{p.id}</span></td>
+                            <td><span className="mono" style={{ fontSize: 11, opacity: .7 }}>USR-{p.userId}</span></td>
+                            <td><span style={{ fontWeight: 700, fontSize: 13 }}>{p.policyName}</span></td>
+                            <td><Badge status={p.status} /></td>
+                            <td style={{ textAlign: 'right', paddingRight: 24 }}>
+                              <span className="mono" style={{ fontWeight: 700, color: p.outstandingBalance > 0 ? '#ef4444' : '#22c55e' }}>
+                                ₹{p.outstandingBalance?.toLocaleString()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {!loadingGlobal && globalPolicies.length === 0 && (
+                          <tr><td colSpan={5} style={{ textAlign: 'center', padding: '60px 0', opacity: .4 }}>No active subscriptions found.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Global Subscriptions Pagination */}
+                  {totalGlobalPoliciesPages > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 15, padding: '16px 22px', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg)' }}>
+                      <button 
+                        onClick={() => setGlobalPoliciesPage(p => Math.max(1, p - 1))}
+                        disabled={globalPoliciesPage === 1}
+                        style={{ background: 'none', border: 'none', color: globalPoliciesPage === 1 ? '#ccc' : 'var(--color-primary)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+                      >
+                        ← Prev
+                      </button>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 700 }}>{globalPoliciesPage} / {totalGlobalPoliciesPages}</span>
+                      <button 
+                        onClick={() => setGlobalPoliciesPage(p => Math.min(totalGlobalPoliciesPages, p + 1))}
+                        disabled={globalPoliciesPage === totalGlobalPoliciesPages}
+                        style={{ background: 'none', border: 'none', color: globalPoliciesPage === totalGlobalPoliciesPages ? '#ccc' : 'var(--color-primary)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="fade-up">
