@@ -103,13 +103,13 @@ class CoverageTest {
         String secret = Base64.getEncoder().encodeToString("very-long-secret-key-that-is-at-least-512-bits-long-for-hmac-sha-512-algorithm".getBytes());
         ReflectionTestUtils.setField(util, "secret", secret);
         String token = Jwts.builder().setSubject("s").claim("userId", 1L).claim("role", "R")
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)), SignatureAlgorithm.HS512).compact();
+                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)), SignatureAlgorithm.HS256).compact();
         assertEquals("s", util.extractEmail(token));
         assertEquals(1L, util.extractUserId(token));
         assertNotNull(util.extractClaims(token));
         
         String t2 = Jwts.builder().setSubject("s")
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)), SignatureAlgorithm.HS512).compact();
+                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)), SignatureAlgorithm.HS256).compact();
         try { util.extractUserId(t2); } catch (Exception e) {}
         try { util.extractRole(t2); } catch (Exception e) {}
     }

@@ -64,8 +64,11 @@ public class AuthServiceImpl implements IAuthService {
 	@Transactional
 	public AuthResponse login(LoginRequest req) {
 	    String email = req.getEmail().trim().toLowerCase();
-	    User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("INVALID"));
-	    if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) throw new RuntimeException("INVALID");
+	    User user = userRepository.findByEmail(email).orElseThrow(() -> new com.group2.auth_service.exception.UnauthorizedException("Invalid email or password", "AUTH_INVALID_CREDENTIALS"));
+	    
+	    if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+	        throw new com.group2.auth_service.exception.UnauthorizedException("Invalid email or password", "AUTH_INVALID_CREDENTIALS");
+	    }
 	    
 	    String token = jwtUtil.generateToken(user.getEmail(), user.getId(), user.getRole().name());
 	    String refresh = jwtUtil.generateRefreshToken(user.getEmail(), user.getId());

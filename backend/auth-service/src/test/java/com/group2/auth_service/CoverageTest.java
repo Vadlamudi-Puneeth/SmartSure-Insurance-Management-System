@@ -49,7 +49,7 @@ class CoverageTest {
                 .claim("role", "CUSTOMER")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + exp))
-                .signWith(key, SignatureAlgorithm.HS512)
+                .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 

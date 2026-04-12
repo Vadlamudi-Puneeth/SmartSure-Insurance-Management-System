@@ -180,7 +180,7 @@ class CoverageTest {
                 .setSubject("user@test.com")
                 .claim("userId", 42L)
                 .claim("role", "CUSTOMER")
-                .signWith(key, io.jsonwebtoken.SignatureAlgorithm.HS512)
+                .signWith(key, io.jsonwebtoken.SignatureAlgorithm.HS256)
                 .compact();
         assertEquals("user@test.com", util.extractEmail(token));
         assertEquals(42L, util.extractUserId(token));
