@@ -36,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CoverageTest {
 
-    // A valid base64-encoded secret (256-bit)
-    private static final String VALID_SECRET = "dGVzdC1zZWNyZXQtdGhhdC1pcy1leGFjdGx5LTI1Ni1iaXRz";
+    // A valid base64-encoded secret
+    private static final String VALID_SECRET = "very-long-base64-secret-key-that-is-at-least-512-bits-for-sha-512-security-standard";
 
     private String generateRealToken(boolean expired) {
         byte[] keyBytes = Decoders.BASE64.decode(VALID_SECRET);
@@ -49,7 +49,7 @@ class CoverageTest {
                 .claim("role", "CUSTOMER")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + exp))
-                .signWith(key, SignatureAlgorithm.HS256)
+                .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }
 

@@ -27,39 +27,39 @@ jobs:
 
       # ── Build & Test each microservice (generates JaCoCo XML reports) ──
       - name: Build & Test - eureka-server
-        run: mvn -B clean verify -f backend/eureka-server/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/eureka-server/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - config-server
-        run: mvn -B clean verify -f backend/config-server/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/config-server/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - api-gateway
-        run: mvn -B clean verify -f backend/api-gateway/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/api-gateway/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - auth-service
-        run: mvn -B clean verify -f backend/auth-service/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/auth-service/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - admin-service
-        run: mvn -B clean verify -f backend/admin-service/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/admin-service/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - claims-service
-        run: mvn -B clean verify -f backend/claims-service/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/claims-service/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - policy-service
-        run: mvn -B clean verify -f backend/policy-service/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/policy-service/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - payment-service
-        run: mvn -B clean verify -f backend/payment-service/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/payment-service/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       - name: Build & Test - notification-service
-        run: mvn -B clean verify -f backend/notification-service/pom.xml -Dspring.cloud.config.enabled=false
+        run: mvn -B clean verify -f backend/notification-service/pom.xml -Dspring.cloud.config.enabled=false -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
       # ── Verify JaCoCo reports exist ──

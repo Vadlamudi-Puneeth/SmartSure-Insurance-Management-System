@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CoverageTest {
 
-    private static final String VALID_SECRET = "dGVzdC1zZWNyZXQtdGhhdC1pcy1leGFjdGx5LTI1Ni1iaXRz";
+    private static final String VALID_SECRET = "very-long-base64-secret-key-that-is-at-least-512-bits-for-sha-512-security-standard";
 
     // ---- ClaimMapper ----
     @Test
@@ -180,7 +180,7 @@ class CoverageTest {
                 .setSubject("user@test.com")
                 .claim("userId", 42L)
                 .claim("role", "CUSTOMER")
-                .signWith(key)
+                .signWith(key, io.jsonwebtoken.SignatureAlgorithm.HS512)
                 .compact();
         assertEquals("user@test.com", util.extractEmail(token));
         assertEquals(42L, util.extractUserId(token));

@@ -30,7 +30,7 @@ public class JwtUtil {
 	                .claim("role", role)
 	                .setIssuedAt(new Date(System.currentTimeMillis()))
 	                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRATION))
-	                .signWith(getSignKey(), SignatureAlgorithm.HS256)
+	                .signWith(getSignKey(), SignatureAlgorithm.HS512)
 	                .compact();
 	 }
 
@@ -40,7 +40,7 @@ public class JwtUtil {
 	            .claim("userId", userId)
 	            .setIssuedAt(new Date(System.currentTimeMillis()))
 	            .setExpiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRATION))
-	            .signWith(getSignKey(), SignatureAlgorithm.HS256)
+	            .signWith(getSignKey(), SignatureAlgorithm.HS512)
 	            .compact();
 	 }
 	    

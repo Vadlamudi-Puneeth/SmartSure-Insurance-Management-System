@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
@@ -21,6 +23,7 @@ import com.group2.payment_service.repository.PolicyRepository;
 
 @Service
 public class PaymentService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     @Value("${razorpay.key.id}")
     private String razorpayKeyId;
@@ -84,7 +87,7 @@ public class PaymentService {
             return new PaymentResponse(order.get("id"), "CREATED", request.getAmount(), "Order created successfully");
 
         } catch (RazorpayException e) {
-            e.printStackTrace();
+            log.error("Exception while creating Razorpay order: {}", e.getMessage());
             throw new RuntimeException("Exception while creating Razorpay order: " + e.getMessage());
         }
     }
@@ -120,7 +123,7 @@ public class PaymentService {
                 return "Payment Verification Failed";
             }
         } catch (RazorpayException e) {
-            e.printStackTrace();
+            log.error("Exception while verifying Razorpay payment: {}", e.getMessage());
             throw new RuntimeException("Exception while verifying Razorpay payment: " + e.getMessage());
         }
     }
