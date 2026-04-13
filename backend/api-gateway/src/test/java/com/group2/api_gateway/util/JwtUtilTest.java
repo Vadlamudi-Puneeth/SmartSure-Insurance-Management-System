@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class JwtUtilTest {
 
     private JwtUtil jwtUtil;
-    private String secret = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+    private String secret = "U21hcnRTdXJlSW5zdXJhbmNlTWFuYWdlbWVudFN5c3RlbVNlY3JldEtleTIwMjZGb3JKV1RTZWN1cml0eQ==";
     private String validToken;
 
     @BeforeEach

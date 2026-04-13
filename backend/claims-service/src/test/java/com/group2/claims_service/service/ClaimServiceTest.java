@@ -101,7 +101,7 @@ public class ClaimServiceTest {
         assertNotNull(claimService.initiateClaim(req));
 
         // No user row → skip inner notification block (u == null)
-        when(authClient.getUserById(anyLong())).thenReturn(null);
+        doReturn(null).when(authClient).getUserById(anyLong());
         when(policyClient.getUserPolicyById(1L)).thenReturn(policy);
         assertNotNull(claimService.initiateClaim(req));
     }
@@ -149,7 +149,7 @@ public class ClaimServiceTest {
         assertEquals("Document uploaded Successfully", claimService.uploadDocument(1L, file));
         
         MockMultipartFile file2 = new MockMultipartFile("f", "t.jpg", "image/jpeg", "d".getBytes());
-        claimService.uploadDocument(1L, file2);
+        claimService.uploadDocument(2L, file2);
 
         MockMultipartFile file3 = new MockMultipartFile("f", "t.txt", "text/plain", "d".getBytes());
         assertThrows(IllegalArgumentException.class, () -> claimService.uploadDocument(1L, file3));
