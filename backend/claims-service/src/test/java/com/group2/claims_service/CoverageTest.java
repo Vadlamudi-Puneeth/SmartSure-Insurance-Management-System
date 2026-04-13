@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CoverageTest {
 
-    private static final String VALID_SECRET = "very-long-base64-secret-key-that-is-at-least-512-bits-for-sha-512-security-standard";
+    private static final String VALID_SECRET = "U21hcnRTdXJlSW5zdXJhbmNlTWFuYWdlbWVudFN5c3RlbVNlY3JldEtleTIwMjZGb3JKV1RTZWN1cml0eQ==";
 
     // ---- ClaimMapper ----
     @Test
