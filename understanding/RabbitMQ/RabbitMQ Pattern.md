@@ -26,33 +26,41 @@ In the **SmartSure** project, we use **RabbitMQ** as our Message Broker. It acts
 
 ## 3. Real-World Use Cases in SmartSure
 
-### ✅ Scenario A: Payment Confirmations
-When you pay a premium, a chain reaction happens:
-1.  **Policy Service** updates your balance in the DB.
-2.  **Policy Service** sends a "Payment Payment Event" to RabbitMQ.
-3.  **RabbitMQ** routes this to the `notification.queue`.
-4.  **Notification Service** picks it up and sends the actual email.
+RabbitMQ is central to our asynchronous communication strategy, enabling decoupled and resilient operations. Here are the primary event flows:
 
-### ✅ Scenario B: The Policy Cancellation Saga 🛡️
-1.  **Policy Service** initiates a cancellation and sends a `policy.cancellation` event.
-2.  **Claims Service** listens for this specific event.
-3.  **Claims Service** automatically rejects any active claims for that policy to prevent fraud.
+| Producer Service | Event / Message | Exchange | Routing Key | Consumer Service(s) | Queue(s) | Purpose |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **policy-service** | `PolicyCancellationEvent` | `policy.exchange` | `cancellation.routing.key` | **claims-service** | `policy.cancellation.queue` | To trigger the Policy Cancellation Saga, ensuring claims are handled correctly when a policy is canceled. |
+| **policy-service** | `NotificationEvent` | `notification.exchange` | `notification.email` | **notification-service** | `notification.queue` | To send notifications (e.g., email) when a policy is created or updated. |
+| **claims-service** | `NotificationEvent` | `notification.exchange` | `notification.send` / `notification.email` | **notification-service** | `notification.queue` | To send notifications about claim status updates (e.g., filed, approved, rejected). |
+| **claims-service** | `ClaimCreatedEvent` | `claim.exchange` | `claim.created.routing.key` | **admin-service** | `claim.created.queue` | To notify the admin service that a new claim has been created and requires review. |
+| **claims-service** | `ClaimReviewEvent` | `claim.exchange` | `claim.review.routing.key` | **claims-service** | `claim.review.queue` | (Internal) To queue claims for internal review processes. |
 
 ---
 
 ## 4. Technical Implementation ("How it's coded")
 
-### The Producer (Sourcing the data)
-In `AsyncNotificationService.java`:
+### The Producer (Sending a message)
+In `policy-service`'s `PolicyCommandServiceImpl.java`, a cancellation event is sent:
 ```java
-// Sending the email "letter"
-rabbitTemplate.convertAndSend("notification.exchange", "notification.email", event);
+rabbitTemplate.convertAndSend(
+    RabbitMQConfig.POLICY_EXCHANGE, 
+    RabbitMQConfig.CANCELLATION_ROUTING_KEY, 
+    new PolicyCancellationEvent(up.getId(), up.getUserId(), LocalDateTime.now())
+);
 ```
 
-### The Consumer (Receiving the data)
-In `NotificationEventListener.java`:
+### The Consumer (Receiving a message)
+In `claims-service`'s `PolicyCancellationListener.java`, the service listens for cancellation events to act upon them:
 ```java
-@RabbitListener(queues = "notification.queue")
+@RabbitListener(queues = "policy.cancellation.queue")
+public void handlePolicyCancellation(PolicyCancellationEvent event) {
+    // Logic to reject active claims for the canceled policy
+}
+```
+In `notification-service`'s `NotificationEventListener.java`, it listens for any notification requests:
+```java
+@RabbitListener(queues = RabbitMQConfig.NOTIFICATION_QUEUE)
 public void handleEmailNotification(NotificationEvent event) {
     // Code to send the real Email/SMS
 }
@@ -63,16 +71,34 @@ public void handleEmailNotification(NotificationEvent event) {
 ## 5. Visual Messaging Flow
 
 ```mermaid
-graph LR
-    User -->|Makes Payment| PS[Policy Service]
-    PS -->|1. Write to DB| DB[(PostgreSQL)]
-    PS -->|2. Emit Event| RMQ{RabbitMQ Exchange}
-    
-    RMQ -->|Route: notification.email| Q_Email[Notification Queue]
-    RMQ -->|Route: policy.cancellation| Q_Saga[Saga Queue]
-    
-    Q_Email -->|3. Consume| NS[Notification Service]
-    Q_Saga -->|3. Consume| CS[Claims Service]
-    
-    NS -->|4. Final Step| Email[User's Inbox 📧]
+graph TD
+    subgraph "Producers"
+        direction LR
+        PS(policy-service)
+        CS_P(claims-service)
+    end
+
+    subgraph "Message Broker"
+        direction LR
+        RMQ{RabbitMQ}
+    end
+
+    subgraph "Consumers"
+        direction LR
+        CS_C(claims-service)
+        ADMIN(admin-service)
+        NS(notification-service)
+    end
+
+    PS -- "PolicyCancellationEvent" --> RMQ
+    PS -- "NotificationEvent" --> RMQ
+    CS_P -- "NotificationEvent" --> RMQ
+    CS_P -- "ClaimCreatedEvent" --> RMQ
+    CS_P -- "ClaimReviewEvent" --> RMQ
+
+    RMQ -- "policy.cancellation.queue" --> CS_C
+    RMQ -- "claim.created.queue" --> ADMIN
+    RMQ -- "notification.queue" --> NS
+    RMQ -- "claim.review.queue" --> CS_C
 ```
+

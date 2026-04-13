@@ -6,19 +6,27 @@ In the **SmartSure** project, we use **CQRS (Command Query Responsibility Segreg
 
 ## 1. What is CQRS?
 
-Traditionally, we use one service for everything. In **CQRS**, we split the responsibility:
-1.  **Command Side (WRITE)**: Handles actions that change data (Create, Update, Delete).
-2.  **Query Side (READ)**: Handles fetching data (GET requests, Search, Statistics).
+CQRS stands for **Command Query Responsibility Segregation**. It's a pattern that separates the "write" operations (Commands) from the "read" operations (Queries). In your project, this is most clearly implemented in the `policy-service`.
+
+1.  **Command Side (WRITE)**: Handles actions that change data (Create, Update, Delete). This is managed by `PolicyCommandServiceImpl.java`.
+2.  **Query Side (READ)**: Handles fetching data (GET requests, Search, Statistics). This is managed by `PolicyQueryServiceImpl.java`.
 
 ### Where is it in your project?
-Look at the `policy-service` implementation folder:
-*   **Command**: `PolicyCommandServiceImpl.java` (Handles purchases, cancellations, payments).
-*   **Query**: `PolicyQueryServiceImpl.java` (Handles fetching policy lists, user policies, and stats).
+The CQRS pattern is implemented in the following services:
+
+| Service | Command Service | Query Service |
+| :--- | :--- | :--- |
+| **policy-service** | `PolicyCommandServiceImpl.java` | `PolicyQueryServiceImpl.java` |
+| **claims-service** | `ClaimServiceImpl.java` (for create/update) | `ClaimServiceImpl.java` (for get/find) |
+| **auth-service** | `AuthServiceImpl.java` (for signup/update) | `AuthServiceImpl.java` (for get user) |
+| **admin-service** | (Implicitly used for updates) | (Implicitly used for fetching data) |
+
+While `policy-service` has a very explicit separation in its class structure, other services like `claims-service` and `auth-service` also follow the pattern by separating their methods for command and query operations, even if they are in the same class.
 
 ---
 
 ## 2. Redis Caching in CQRS
-To make the **Query Side** lightning fast, we use **Redis Caching**. Instead of hitting the database every time a user views their policies, we store the result in Redis.
+To make the **Query Side** lightning fast, we use **Redis Caching** in the `policy-service`. Instead of hitting the database every time a user views their policies, we store the result in Redis.
 
 ### How it works:
 1.  **User reads data**: The system checks Redis. if found, it returns immediately (Fast! ⚡).
@@ -53,7 +61,7 @@ Spring Cache makes this easy with three main annotations used in your code:
     *   `allEntries = true`: Deletes *everything* in that cache category to ensure 100% fresh data.
 
 ### ⚙️ `@Transactional`
-*   **Used in**: Both services.
+*   **Used in**: Both command and query services.
 *   **What it does**: Ensures that either **all** steps succeed or **none** do. If the database update fails, the cache won't be cleared, ensuring the system doesn't get into a "confused" state.
 
 ---
@@ -72,14 +80,15 @@ Spring Cache makes this easy with three main annotations used in your code:
 
 ```mermaid
 graph TD
-    User-->|PUT /purchase| Command[Command Service]
+    User-->|PUT /purchase| Command[Command Service (e.g., PolicyCommandServiceImpl)]
     Command-->|1. Update DB| DB[(PostgreSQL)]
     Command-->|2. Cache Evict| Redis((Redis Cache))
     
-    User-->|GET /policies| Query[Query Service]
+    User-->|GET /policies| Query[Query Service (e.g., PolicyQueryServiceImpl)]
     Query-->|1. Check Cache| Redis
     Redis--|If Miss| Query
     Query-->|2. Fetch| DB
     Query-->|3. Save to| Redis
     Redis--|If Hit| User
 ```
+

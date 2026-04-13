@@ -20,22 +20,39 @@ Feign is a **Declarative REST Client**.
 
 ---
 
-## 3. Real-World Use Case in SmartSure
+## 3. Real-World Use Cases in SmartSure
 
-### ✅ Scenario: Fetching User Data for Email
-When the **Policy Service** needs to send an email, it knows the `userId`, but it doesn't know the user's `Name` or `Email`. That data lives in the **Auth Service** database.
+Feign is used extensively across the SmartSure application for synchronous, direct communication between services. Here are the key interactions:
 
-**The Flow**:
-1.  **Policy Service** calls `AuthClient.getUserById(userId)`.
-2.  **Auth Service** receives the request, looks in its DB, and returns the User details.
-3.  **Policy Service** receives the details and proceeds to send the notification.
+| Calling Service | Target Service | Feign Client Interface | Purpose |
+| :--- | :--- | :--- | :--- |
+| **admin-service** | `policy-service` | `PolicyFeignClient` | To manage policies (e.g., view, update). |
+| | `claims-service` | `ClaimsFeignClient` | To manage claims (e.g., approve, reject). |
+| | `auth-service` | `AuthFeignClient` | To fetch user details. |
+| | `notification-service`| `NotificationFeignClient`| To trigger notifications. |
+| **claims-service** | `policy-service` | `PolicyClient` | To validate policy details when a claim is filed. |
+| | `notification-service`| `NotificationClient` | To send notifications about claim status updates. |
+| | `auth-service` | `AuthClient` | To get user information related to a claim. |
+| **policy-service** | `notification-service`| `NotificationClient` | To send notifications when a policy is created or updated. |
+| | `auth-service` | `AuthClient` | To fetch user data for policy creation. |
+| **auth-service** | `notification-service`| `NotificationClient` | To send welcome emails or other authentication-related notifications. |
 
 ---
 
 ## 4. Technical Implementation ("How it's coded")
 
 ### The Client Interface
-In `AuthClient.java`:
+Here are a few examples of how Feign clients are defined in the project:
+
+**In `claims-service` -> `PolicyClient.java`:**
+```java
+@FeignClient(name = "policy-service", path = "/api")
+public interface PolicyClient {
+    // Methods to interact with policy-service
+}
+```
+
+**In `policy-service` -> `AuthClient.java`:**
 ```java
 @FeignClient(name = "AUTH-SERVICE", path = "/api/auth") // Points to the other service
 public interface AuthClient {
@@ -46,7 +63,7 @@ public interface AuthClient {
 ```
 
 ### Using the Client
-In `PolicyCommandServiceImpl.java`:
+In a service implementation (e.g., `PolicyCommandServiceImpl.java`):
 ```java
 // It looks like a normal local method call!
 UserDTO user = authClient.getUserById(userId);
@@ -68,13 +85,45 @@ String email = user.getEmail();
 
 ## 6. Visual Flow of Feign
 
-```mermaid
-sequenceDiagram
-    participant PS as Policy Service
-    participant AS as Auth Service
+Here is a diagram showing all the Feign communication paths between your services:
 
-    PS->>AS: GET /api/auth/users/101 (Request)
-    Note over AS: Looks up DB for 101
-    AS-->>PS: { "name": "Sathvik", "email": "..." } (Response)
-    Note over PS: Continues execution...
+```mermaid
+graph TD
+    subgraph "Frontend"
+        direction LR
+        UI(React App)
+    end
+
+    subgraph "Backend Microservices"
+        direction LR
+        API_GW(API Gateway)
+        ADMIN(admin-service)
+        AUTH(auth-service)
+        POLICY(policy-service)
+        CLAIMS(claims-service)
+        NOTIFICATION(notification-service)
+    end
+
+    UI --> API_GW
+
+    API_GW --> ADMIN
+    API_GW --> AUTH
+    API_GW --> POLICY
+    API_GW --> CLAIMS
+    API_GW --> NOTIFICATION
+
+    ADMIN -- "Feign" --> POLICY
+    ADMIN -- "Feign" --> CLAIMS
+    ADMIN -- "Feign" --> AUTH
+    ADMIN -- "Feign" --> NOTIFICATION
+
+    CLAIMS -- "Feign" --> POLICY
+    CLAIMS -- "Feign" --> NOTIFICATION
+    CLAIMS -- "Feign" --> AUTH
+
+    POLICY -- "Feign" --> NOTIFICATION
+    POLICY -- "Feign" --> AUTH
+
+    AUTH -- "Feign" --> NOTIFICATION
 ```
+
