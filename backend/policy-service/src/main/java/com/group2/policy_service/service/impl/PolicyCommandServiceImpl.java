@@ -116,6 +116,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
         Policy p = new Policy();
         p.setPolicyName(dto.getPolicyName()); p.setDescription(dto.getDescription());
         p.setPremiumAmount(dto.getPremiumAmount()); p.setDurationInMonths(dto.getDurationInMonths());
+        p.setCoverageAmount(dto.getCoverageAmount());
         p.setPolicyType(type); p.setActive(true);
         policyRepository.save(p);
         return mapper.mapToPolicyResponse(p);
@@ -126,6 +127,7 @@ public class PolicyCommandServiceImpl implements IPolicyCommandService {
     public PolicyResponseDTO updatePolicy(Long id, PolicyRequestDTO dto) {
         Policy p = policyRepository.findById(id).orElseThrow(() -> new RuntimeException("Not found"));
         p.setPolicyName(dto.getPolicyName()); p.setPremiumAmount(dto.getPremiumAmount());
+        p.setCoverageAmount(dto.getCoverageAmount());
         p.setDurationInMonths(dto.getDurationInMonths());
         if (dto.getPolicyTypeId() != null) p.setPolicyType(policyTypeRepository.findById(dto.getPolicyTypeId()).get());
         policyRepository.save(p);
