@@ -157,4 +157,82 @@ public class AdminServiceTest {
         ReportResponse partial = adminService.getReports();
         assertEquals(3, partial.getTotalClaims());
     }
+
+    @Test
+    void testAdminServiceImplExhaustiveBranches() {
+        // setup users
+        UserDTO uAdmin = new UserDTO(); uAdmin.setRole("SUPER_ADMIN"); uAdmin.setId(101L); uAdmin.setName("A"); uAdmin.setEmail("a@a.com");
+        UserDTO uUser = new UserDTO(); uUser.setRole("USER"); uUser.setId(102L); uUser.setName("John"); uUser.setEmail("j@j.com");
+        UserDTO uNoRole = new UserDTO(); uNoRole.setRole(null); uNoRole.setId(103L); uNoRole.setName(null); uNoRole.setEmail(null); // NULL name/email
+        UserDTO uIncomplete = new UserDTO(); uIncomplete.setId(null); // Filtered out by null check
+        
+        when(authClient.getAllUsers()).thenReturn(Arrays.asList(uAdmin, uUser, uNoRole, uIncomplete, null));
+        // safeList branches: return null to trigger (list != null ? list : List.of())
+        when(policyClient.getAllUserPolicies()).thenReturn(null);
+        when(claimClient.getAllClaims()).thenReturn(null);
+        
+        // isAdminRole branching and enrichUser
+        Map<String, Object> map = adminService.getFilteredUsers(0, 10, null, null, null);
+        List<?> content = (List<?>) map.get("content");
+        assertEquals(2, content.size()); 
+
+        // enrichUser branches (policies/claims) with null status values
+        UserPolicyDTO upNull = new UserPolicyDTO(); upNull.setUserId(102L); upNull.setStatus(null);
+        UserPolicyDTO upPending = new UserPolicyDTO(); upPending.setUserId(102L); upPending.setStatus("PENDING_CANCELLATION");
+        UserPolicyDTO upActive = new UserPolicyDTO(); upActive.setUserId(102L); upActive.setStatus("ACTIVE");
+        
+        ClaimDTO cNull = new ClaimDTO(); cNull.setUserId(102L); cNull.setStatus(null);
+        ClaimDTO cSubmitted = new ClaimDTO(); cSubmitted.setUserId(102L); cSubmitted.setStatus("SUBMITTED");
+        ClaimDTO cReviewing = new ClaimDTO(); cReviewing.setUserId(102L); cReviewing.setStatus("UNDER_REVIEW");
+        
+        when(policyClient.getAllUserPolicies()).thenReturn(Arrays.asList(upNull, upPending, upActive, null)); // include null for up != null branch
+        when(claimClient.getAllClaims()).thenReturn(Arrays.asList(cNull, cSubmitted, cReviewing, null)); 
+        
+        // Search & Filter branches (Exhaustive)
+        adminService.getFilteredUsers(0, 10, "", "ALL", "ALL");
+        adminService.getFilteredUsers(0, 10, "john", null, null);
+        adminService.getFilteredUsers(0, 10, "j@j.com", null, null);
+        adminService.getFilteredUsers(0, 10, "nomatch", null, null);
+        
+        // Policy Status filter
+        adminService.getFilteredUsers(0, 10, null, "PENDING_CANCELLATION", null);
+        adminService.getFilteredUsers(0, 10, null, "ACTIVE", null);
+        adminService.getFilteredUsers(0, 10, null, "OTHER", null);
+        
+        // Claim Status filter
+        adminService.getFilteredUsers(0, 10, null, null, "SUBMITTED");
+        adminService.getFilteredUsers(0, 10, null, null, "UNDER_REVIEW");
+        adminService.getFilteredUsers(0, 10, null, null, "OTHER");
+        
+        // Pagination edge cases
+        adminService.getFilteredUsers(-1, -1, null, "ALL", "ALL"); 
+        adminService.getFilteredUsers(10, 5, null, "ALL", "ALL");
+        
+        // Empty case
+        when(authClient.getAllUsers()).thenReturn(List.of());
+        Map<String, Object> empty = adminService.getFilteredUsers(0, 10, null, null, null);
+        assertEquals(1L, empty.get("totalPages"));
+
+        // safeList exception catch blocks
+        when(authClient.getAllUsers()).thenThrow(new RuntimeException("auth error"));
+        adminService.getFilteredUsers(0, 10, null, null, null);
+    }
+
+    @Test
+    void testInternalUtilityMethods() {
+        ReviewRequest r1 = new ReviewRequest(); r1.setStatus("A"); r1.setRemark(null);
+        ReviewRequest r2 = new ReviewRequest(); r2.setStatus("A"); r2.setRemark("  "); // blank
+        ReviewRequest r3 = new ReviewRequest(); r3.setStatus("A"); r3.setRemark("& < > \"");
+        ReviewRequest r4 = new ReviewRequest(); r4.setStatus(null); r4.setRemark("ok"); // null status
+        
+        ClaimDTO c = new ClaimDTO(); c.setUserId(1L);
+        UserDTO u = new UserDTO(); u.setEmail("t@t.com");
+        when(claimClient.getClaimById(anyLong())).thenReturn(c);
+        when(authClient.getUserById(anyLong())).thenReturn(u);
+        
+        adminService.reviewClaim(1L, r1);
+        adminService.reviewClaim(1L, r2);
+        adminService.reviewClaim(1L, r3);
+        adminService.reviewClaim(1L, r4);
+    }
 }

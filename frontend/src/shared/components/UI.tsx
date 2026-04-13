@@ -182,11 +182,13 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: any) {
   );
 }
 
-export function Input({ label, error, ...props }: any) {
+export function Input({ label, error, id, ...props }: any) {
+  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
   return (
     <div className="space-y-1.5">
-      {label && <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
+      {label && <label htmlFor={inputId} className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
       <input
+        id={inputId}
         className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 focus:ring-2"
         style={{
           backgroundColor: 'var(--color-bg)',
@@ -200,11 +202,13 @@ export function Input({ label, error, ...props }: any) {
   );
 }
 
-export function Select({ label, error, children, ...props }: any) {
+export function Select({ label, error, id, children, ...props }: any) {
+  const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
   return (
     <div className="space-y-1.5">
-      {label && <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
+      {label && <label htmlFor={selectId} className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
       <select
+        id={selectId}
         className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 focus:ring-2"
         style={{
           backgroundColor: 'var(--color-bg)',
@@ -219,11 +223,13 @@ export function Select({ label, error, children, ...props }: any) {
   );
 }
 
-export function Textarea({ label, error, ...props }: any) {
+export function Textarea({ label, error, id, ...props }: any) {
+  const areaId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
   return (
     <div className="space-y-1.5">
-      {label && <label className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
+      {label && <label htmlFor={areaId} className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
       <textarea
+        id={areaId}
         className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 focus:ring-2 resize-y min-h-[120px]"
         style={{
           backgroundColor: 'var(--color-bg)',
