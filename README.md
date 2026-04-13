@@ -4,7 +4,7 @@
 
 **Enterprise-Grade, Cloud-Native Insurance Platform**
 
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.11-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.13-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
 ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.0.1-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2.4-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
@@ -194,7 +194,7 @@ The Docker Compose deployment defines two distinct bridge networks to enforce ne
 
 | Component | Technology | Version | Purpose |
 |-----------|-----------|---------|---------|
-| ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?style=flat-square&logo=springboot&logoColor=white) | Spring Boot | 3.5.11 | Core application framework for all microservices providing auto-configuration, embedded server, and dependency injection. |
+| ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?style=flat-square&logo=springboot&logoColor=white) | Spring Boot | 3.5.13 | Core application framework for all microservices providing auto-configuration, embedded server, and dependency injection. |
 | ![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-6DB33F?style=flat-square&logo=spring&logoColor=white) | Spring Cloud | 2025.0.1 | Distributed systems toolkit providing service discovery, centralized configuration, and API gateway capabilities. |
 | ![Spring Security](https://img.shields.io/badge/Spring%20Security-6DB33F?style=flat-square&logo=springsecurity&logoColor=white) | Spring Security | 6.x | Authentication and authorization framework used for JWT filter chains and endpoint-level access control. |
 | ![Java](https://img.shields.io/badge/Java-ED8B00?style=flat-square&logo=openjdk&logoColor=white) | Java (OpenJDK) | 17 LTS | Runtime platform for all backend services. Chosen for long-term support and modern language features. |
