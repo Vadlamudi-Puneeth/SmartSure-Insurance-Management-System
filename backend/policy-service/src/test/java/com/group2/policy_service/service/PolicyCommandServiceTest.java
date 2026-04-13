@@ -159,6 +159,46 @@ public class PolicyCommandServiceTest {
     }
 
     @Test
+    void testCreatePolicy() {
+        // Arrange
+        PolicyRequestDTO dto = new PolicyRequestDTO();
+        dto.setPolicyName("New Policy");
+        dto.setPolicyTypeId(1L);
+        dto.setCoverageAmount(50000.0);
+
+        Policy savedPolicy = new Policy();
+        when(policyTypeRepository.findById(1L)).thenReturn(Optional.of(new PolicyType()));
+        when(policyRepository.save(any(Policy.class))).thenReturn(savedPolicy);
+
+        // Act
+        service.createPolicy(dto);
+
+        // Assert
+        ArgumentCaptor<Policy> policyCaptor = ArgumentCaptor.forClass(Policy.class);
+        verify(policyRepository).save(policyCaptor.capture());
+        assertEquals(50000.0, policyCaptor.getValue().getCoverageAmount());
+    }
+
+    @Test
+    void testUpdatePolicy() {
+        // Arrange
+        PolicyRequestDTO dto = new PolicyRequestDTO();
+        dto.setPolicyName("Updated Policy");
+        dto.setCoverageAmount(75000.0);
+        dto.setPolicyTypeId(1L);
+
+        when(policyTypeRepository.findById(1L)).thenReturn(Optional.of(new PolicyType()));
+
+        // Act
+        service.updatePolicy(1L, dto);
+
+        // Assert
+        ArgumentCaptor<Policy> policyCaptor = ArgumentCaptor.forClass(Policy.class);
+        verify(policyRepository).save(policyCaptor.capture());
+        assertEquals(75000.0, policyCaptor.getValue().getCoverageAmount());
+    }
+
+    @Test
     void testUpdate_1() {
         PolicyRequestDTO d = new PolicyRequestDTO(); d.setPolicyTypeId(1L);
         when(policyTypeRepository.findById(1L)).thenReturn(Optional.of(new PolicyType()));
@@ -167,6 +207,7 @@ public class PolicyCommandServiceTest {
 
     @Test
     void testPrincipalString() {
+// ... existing code ...
         Authentication auth = mock(Authentication.class); when(auth.getPrincipal()).thenReturn("100");
         SecurityContext ctx = mock(SecurityContext.class); when(ctx.getAuthentication()).thenReturn(auth);
         SecurityContextHolder.setContext(ctx);
