@@ -66,34 +66,34 @@ This is our entire treehouse project! It contains every single piece we need to 
 This is the heart of our treehouse, where all the construction and magical spells happen. All the code that makes our app work lives here.
 
 *   **`main.tsx`**: The grand entrance! This file is the very first thing that runs. It finds the main door in our HTML and tells our app to start building itself right there.
-    *   **Website Example**: When you first load `www.youtube.com`, a file like this kicks everything off, loading the main YouTube app into your browser.
+    *   **Website Example**: When you first load `smartsureinsurance.work.gd`, this file kicks everything off, loading the SmartSure insurance platform into your browser.
 
 *   **`App.tsx`**: This is the main blueprint of our treehouse. It holds the primary layout and brings together all the different parts, like the header, sidebar, and main content area.
-    *   **Website Example**: On Facebook, `App.tsx` would be the component that holds the blue top bar, the left-side menu, the main feed in the middle, and the chat bar on the right.
+    *   **Website Example**: On SmartSure, `App.tsx` holds the sticky navigation bar (with the theme toggle), the main scrollable content area, and the footer.
 
 *   **`routes.tsx`**: Our treehouse's magical map! This file looks at the URL in your browser and decides which room (or page) to show you.
-    *   **Website Example**: If you go to `twitter.com/home`, the router shows you the home feed. If you go to `twitter.com/notifications`, it shows you your notifications. That's routing in action!
+    *   **Website Example**: If you go to `/about`, the router shows the company mission. If you go to `/login`, it shows the secure sign-in portal.
 
 *   **`assets`**: The decoration box! This folder holds all our images, logos, custom fonts, and icons. Anything that adds visual flair to our site.
-    *   **Website Example**: The little magnifying glass icon you click to search, or the company logo at the top of the page.
+    *   **Website Example**: The shield-check logo at the top left, or the "Car" and "Heart" icons used for Auto and Health insurance categories.
 
 *   **`core`**: The essential plumbing and wiring of our treehouse. This holds critical, central logic that the entire application depends on, like how we talk to our backend servers.
-    *   **Website Example**: The core logic at a bank's website that securely sends your login information to the server.
+    *   **Website Example**: The logic that handles secure communication with our backend for checking OTPs during registration.
 
 *   **`features`**: This is like a collection of specialized rooms in our treehouse. Each major feature of our app, like the "User Profile," "Dashboard," or "Claims Page," gets its own folder here. This keeps the code for each feature neat and tidy.
-    *   **Website Example**: On an online shopping site like Amazon, the "Shopping Cart," "Product Search," and "Customer Reviews" would each be a separate feature.
+    *   **Website Example**: In SmartSure, the "Insurance Policies," "Claims Tracking," and "User Profile" would each be a separate feature.
 
 *   **`layouts`**: The blueprints for the overall structure of our pages. For example, we might have one layout for pages where the user is logged in (with a sidebar and header) and another for pages when they are logged out (just a simple centered box).
-    *   **Website Example**: Most news websites have a consistent layout for all their articles: a headline at the top, the author's name, the article text, and a comments section at the bottom.
+    *   **Website Example**: SmartSure has a clean layout for landing pages and a more focused, split-screen layout for the Login and Registration pages.
 
 *   **`shared`**: A box of reusable LEGO bricks! This folder contains components and functions that are used in many different features across the site, like custom buttons, input fields, or modals.
-    *   **Website Example**: The "Like" button on Instagram. It's the same button, and it looks and works the same whether it's on a photo, a video, or a comment.
+    *   **Website Example**: The Indigo "Get Started" button. It's the same styled button used for "Sign In," "Submit Contact," and "Verify OTP."
 
 *   **`store`**: The treehouse's brain! This is where we keep track of important information (the "state") that needs to be shared across the entire app. For example, is the user currently logged in? What's in their shopping cart?
-    *   **Website Example**: When you add an item to your cart on one page and then navigate to a different page, the cart icon at the top still shows the correct number of items. That number is kept in the store.
+    *   **Website Example**: When you toggle the sun/moon icon, the entire app switches to Dark Mode. This "Theme State" is kept in the store so all pages know which colors to show.
 
 *   **`styles`**: The paint and wallpaper! This folder holds our global CSS styles. It defines the overall look and feel, like our color palette, fonts, and the general spacing of things.
-    *   **Website Example**: A brand like Coca-Cola has a very specific red color. The global style file would define that red so it can be used consistently everywhere.
+    *   **Website Example**: SmartSure uses a vibrant Indigo (`#6366f1`) for primary actions and a sleek Slate-950/Black for its Dark Mode background.
 
 *   **`test`**: The quality control station. We write special code here to automatically test our components and features to make sure they work correctly and don't break when we make changes.
 

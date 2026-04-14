@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartSure — Technical Diagrams</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --navy: #1a365d;
+            --blue: #2563eb;
+            --sky: #dbeafe;
+            --slate: #475569;
+            --muted: #94a3b8;
+            --light: #f1f5f9;
+            --border: #e2e8f0;
+            --white: #ffffff;
+            --green: #dcfce7;
+            --green-b: #16a34a;
+            --amber: #fef3c7;
+            --amber-b: #d97706;
+            --purple: #ede9fe;
+            --purple-b: #7c3aed;
+            --rose: #ffe4e6;
+            --rose-b: #e11d48;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; color: var(--navy); background: var(--white); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+        /* ──── COVER ──── */
+        .cover {
+            height: 100vh; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            page-break-after: always;
+        }
+        .cover h1 { font-size: 3.2rem; font-weight: 700; color: var(--navy); letter-spacing: -1px; }
+        .cover .sub { font-size: 1.15rem; font-weight: 300; color: var(--slate); margin-top: 4px; }
+        .cover .divider { width: 50px; height: 3px; background: var(--blue); margin: 36px auto; }
+        .cover .info { font-size: 0.85rem; color: var(--muted); line-height: 2.3; }
+        .cover .info b { color: var(--slate); font-weight: 600; }
+
+        /* ──── PAGES ──── */
+        .page {
+            page-break-before: always;
+            padding: 40px 56px;
+            min-height: 100vh;
+        }
+        .page .label { font-size: 0.65rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+        .page h2 { font-size: 1.4rem; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+        .page .desc { font-size: 0.82rem; color: var(--slate); line-height: 1.6; margin-bottom: 28px; max-width: 680px; }
+
+        /* ──── ARCHITECTURE DIAGRAM (CSS-BASED) ──── */
+        .arch { display: flex; flex-direction: column; gap: 0; }
+
+        .arch-layer {
+            display: flex; align-items: stretch;
+            border: 1px solid var(--border); border-bottom: none;
+        }
+        .arch-layer:last-child { border-bottom: 1px solid var(--border); }
+
+        .arch-layer-label {
+            width: 170px; min-width: 170px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 12px 16px; text-align: center;
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--white);
+        }
+
+        .arch-layer-content {
+            flex: 1; display: flex; flex-wrap: wrap;
+            align-items: center; justify-content: center;
+            gap: 12px; padding: 16px 20px;
+        }
+
+        .arch-box {
+            background: var(--white);
+            border: 1.5px solid var(--border);
+            border-radius: 8px; padding: 12px 18px;
+            text-align: center; min-width: 130px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .arch-box .name { font-size: 0.82rem; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
+        .arch-box .detail { font-size: 0.68rem; color: var(--muted); line-height: 1.4; }
+        .arch-box .port { font-size: 0.62rem; font-weight: 600; color: var(--blue); margin-top: 4px; }
+
+        .arch-arrow {
+            display: flex; justify-content: center; align-items: center;
+            padding: 4px 0; color: var(--muted); font-size: 0.75rem;
+        }
+        .arch-arrow span { display: flex; flex-direction: column; align-items: center; gap: 0; }
+        .arch-arrow .arrow-line { width: 2px; height: 14px; background: var(--muted); }
+        .arch-arrow .arrow-head { font-size: 0.9rem; line-height: 1; margin-top: -3px; }
+        .arch-arrow .arrow-text { font-size: 0.6rem; color: var(--muted); font-weight: 500; margin-left: 8px; }
+
+        /* Layer colors */
+        .lbl-client { background: var(--blue); }
+        .lbl-gateway { background: #0f766e; }
+        .lbl-services { background: var(--navy); }
+        .lbl-data { background: #7c3aed; }
+        .lbl-infra { background: #475569; }
+        .lbl-observe { background: #92400e; }
+
+        .layer-client { background: #eff6ff; }
+        .layer-gateway { background: #f0fdfa; }
+        .layer-services { background: #f8fafc; }
+        .layer-data { background: #faf5ff; }
+        .layer-infra { background: #f8fafc; }
+        .layer-observe { background: #fffbeb; }
+
+        .arch-box.highlight { border-color: var(--blue); border-width: 2px; }
+
+        /* ──── MERMAID ──── */
+        .mermaid-wrap { margin-top: 8px; }
+
+        /* ──── END PAGE ──── */
+        .end-page {
+            page-break-before: always; height: 100vh;
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; text-align: center;
+        }
+        .end-page .brand { font-size: 1.6rem; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+        .end-page .txt { font-size: 0.78rem; color: var(--muted); }
+
+        @media print {
+            .page { padding: 28px 36px; }
+            .arch-box { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ════════════════════════ COVER ════════════════════════ -->
+<div class="cover">
+    <h1>SmartSure</h1>
+    <div class="sub">Insurance Management System</div>
+    <div class="divider"></div>
+    <div class="info">
+        <b>Document:</b> Architecture, Database &amp; UML Diagrams<br>
+        <b>Version:</b> 1.0 — Stable Release &nbsp;·&nbsp; <b>Date:</b> April 2026<br>
+        <b>Stack:</b> Spring Boot 3 · Spring Cloud · React 18 · PostgreSQL 15 · Docker<br>
+        <b>Services:</b> Auth · Policy · Payment · Claims · Admin · Notification
+    </div>
+</div>
+
+<!-- ════════════════════════ PAGE 1: ARCHITECTURE ════════════════════════ -->
+<div class="page">
+    <div class="label">Diagram 1 of 3</div>
+    <h2>System Architecture</h2>
+    <div class="desc">
+        A layered microservices architecture. Client requests flow top to bottom — from the React frontend
+        through the API Gateway (JWT authentication) to five independently deployable business services,
+        all backed by PostgreSQL, RabbitMQ for events, and Redis for caching.
+    </div>
+
+    <div class="arch">
+        <!-- Layer 1: Client -->
+        <div class="arch-layer">
+            <div class="arch-layer-label lbl-client">Client<br>Layer</div>
+            <div class="arch-layer-content layer-client">
+                <div class="arch-box highlight">
+                    <div class="name">React Frontend</div>
+                    <div class="detail">Vite · TypeScript · Redux</div>
+                    <div class="port">Port 80</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arch-arrow">
+            <span>
+                <div class="arrow-line"></div>
+                <div class="arrow-head">▼</div>
+            </span>
+            <div class="arrow-text">REST / JSON</div>
+        </div>
+
+        <!-- Layer 2: Gateway -->
+        <div class="arch-layer">
+            <div class="arch-layer-label lbl-gateway">Gateway<br>Layer</div>
+            <div class="arch-layer-content layer-gateway">
+                <div class="arch-box highlight">
+                    <div class="name">API Gateway</div>
+                    <div class="detail">Spring Cloud Gateway · JWT Authentication Filter · Route Discovery</div>
+                    <div class="port">Port 8888</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arch-arrow">
+            <span>
+                <div class="arrow-line"></div>
+                <div class="arrow-head">▼</div>
+            </span>
+            <div class="arrow-text">Routes to services via Eureka</div>
+        </div>
+
+        <!-- Layer 3: Business Services -->
+        <div class="arch-layer">
+            <div class="arch-layer-label lbl-services">Business<br>Services</div>
+            <div class="arch-layer-content layer-services">
+                <div class="arch-box">
+                    <div class="name">Auth Service</div>
+                    <div class="detail">JWT · OTP · Refresh Token<br>Password Reset · RBAC</div>
+                    <div class="port">Port 8002</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Policy Service</div>
+                    <div class="detail">CQRS Pattern<br>Command & Query Separation</div>
+                    <div class="port">Port 8004</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Payment Service</div>
+                    <div class="detail">Razorpay Integration<br>Signature Verification</div>
+                    <div class="port">Port 8085</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Claims Service</div>
+                    <div class="detail">Claim Filing · Review<br>Document Upload</div>
+                    <div class="port">Port 8003</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Admin Service</div>
+                    <div class="detail">User Management<br>Claim Approval · Events</div>
+                    <div class="port">Port 8005</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Notification Service</div>
+                    <div class="detail">Email &amp; SMS Alerts<br>Policy &amp; Claim Events</div>
+                    <div class="port">Port 8006</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arch-arrow">
+            <span>
+                <div class="arrow-line"></div>
+                <div class="arrow-head">▼</div>
+            </span>
+            <div class="arrow-text">Persist · Message · Cache</div>
+        </div>
+
+        <!-- Layer 4: Data -->
+        <div class="arch-layer">
+            <div class="arch-layer-label lbl-data">Data &amp;<br>Messaging</div>
+            <div class="arch-layer-content layer-data">
+                <div class="arch-box">
+                    <div class="name">PostgreSQL</div>
+                    <div class="detail">Primary Database<br>All services persist here</div>
+                    <div class="port">Port 5432</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">RabbitMQ</div>
+                    <div class="detail">Event-Driven Messaging<br>Saga: PaymentStatusEvent</div>
+                    <div class="port">Port 5672</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Redis</div>
+                    <div class="detail">OTP Cache · Session Store<br>Used by Auth &amp; Policy</div>
+                    <div class="port">Port 6379</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layer 5: Infrastructure -->
+        <div class="arch-layer">
+            <div class="arch-layer-label lbl-infra">Infra-<br>structure</div>
+            <div class="arch-layer-content layer-infra">
+                <div class="arch-box">
+                    <div class="name">Eureka Server</div>
+                    <div class="detail">Netflix Eureka<br>Service Discovery &amp; Registry</div>
+                    <div class="port">Port 8761</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Config Server</div>
+                    <div class="detail">Spring Cloud Config<br>Centralized Configuration</div>
+                    <div class="port">Port 9999</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layer 6: Observability -->
+        <div class="arch-layer">
+            <div class="arch-layer-label lbl-observe">Observ-<br>ability</div>
+            <div class="arch-layer-content layer-observe">
+                <div class="arch-box">
+                    <div class="name">Zipkin</div>
+                    <div class="detail">Distributed Tracing</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">ELK Stack</div>
+                    <div class="detail">Elasticsearch · Logstash · Kibana<br>Centralized Logging</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">Prometheus + Grafana</div>
+                    <div class="detail">Metrics Collection &amp; Dashboards</div>
+                </div>
+                <div class="arch-box">
+                    <div class="name">SonarQube</div>
+                    <div class="detail">Code Quality &amp; Coverage<br>&gt;95% Coverage Achieved</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════ PAGE 2: DATABASE ERD (AUTH) ════════════════════════ -->
+<div class="page">
+    <div class="label">Diagram 2a of 3 — Database Schema</div>
+    <h2>Entity Relationship Diagram — Authentication Domain</h2>
+    <div class="desc">User identity management, JWT refresh tokens, password recovery, and OTP email verification.</div>
+    <div class="mermaid-wrap">
+        <pre class="mermaid">
+erDiagram
+    users {
+        Long id PK
+        String name
+        String email
+        String password
+        String phone
+        String address
+        Role role
+    }
+
+    refresh_tokens {
+        Long id PK
+        String token
+        Long user_id FK
+        Instant expiryDate
+    }
+
+    password_reset_tokens {
+        Long id PK
+        String token
+        Long user_id FK
+        DateTime expiryDate
+    }
+
+    otp {
+        Long id PK
+        String email
+        String otp
+        Boolean verified
+        DateTime expiryTime
+    }
+
+    users ||--o{ refresh_tokens : "has"
+    users ||--o{ password_reset_tokens : "requests"
+        </pre>
+    </div>
+</div>
+
+<!-- ════════════════════════ PAGE 3: DATABASE ERD (BUSINESS) ════════════════════════ -->
+<div class="page">
+    <div class="label">Diagram 2b of 3 — Database Schema</div>
+    <h2>Entity Relationship Diagram — Business Domain</h2>
+    <div class="desc">Policy catalog, user subscriptions, Razorpay transactions, insurance claims, and supporting documents.</div>
+    <div class="mermaid-wrap">
+        <pre class="mermaid">
+erDiagram
+    policy_types {
+        Long id PK
+        PolicyCategory category
+        String description
+    }
+
+    policies {
+        Long id PK
+        String policyName
+        String description
+        Long policy_type_id FK
+        Double premiumAmount
+        Double coverageAmount
+        Integer durationInMonths
+        Boolean active
+    }
+
+    user_policies {
+        Long id PK
+        Long user_id FK
+        Long policy_id FK
+        PolicyStatus status
+        Double premiumAmount
+        Date startDate
+        Date endDate
+        Date nextPaymentDueDate
+    }
+
+    transactions {
+        Long id PK
+        String razorpayOrderId
+        String razorpayPaymentId
+        String razorpaySignature
+        Long user_id FK
+        Long policy_id FK
+        Long user_policy_id FK
+        Double amount
+        String status
+        DateTime createdAt
+    }
+
+    claims {
+        Long id PK
+        Long policy_id FK
+        Long user_id FK
+        Double claimAmount
+        String description
+        ClaimStatus claimStatus
+        DateTime createdAt
+        String remark
+    }
+
+    claim_documents {
+        Long id PK
+        Long claim_id FK
+        String fileUrl
+        String documentType
+        DateTime uploadedDate
+    }
+
+    policy_types ||--o{ policies : "categorizes"
+    policies ||--o{ user_policies : "subscribed via"
+    user_policies ||--o{ transactions : "paid for"
+    policies ||--o{ claims : "claimed against"
+    claims ||--o{ claim_documents : "evidence"
+        </pre>
+    </div>
+</div>
+
+<!-- ════════════════════════ PAGE 4: UML SEQUENCE ════════════════════════ -->
+<div class="page">
+    <div class="label">Diagram 3 of 3 — UML Sequence</div>
+    <h2>Policy Purchase — End-to-End Interaction</h2>
+    <div class="desc">
+        The complete lifecycle of a policy purchase — from JWT authentication, through 
+        CQRS-based policy creation, to Razorpay payment verification, Saga pattern event 
+        propagation via RabbitMQ, and email notification dispatch.
+    </div>
+    <div class="mermaid-wrap">
+        <pre class="mermaid">
+sequenceDiagram
+    actor Customer
+    participant FE as Frontend
+    participant GW as Gateway
+    participant AUTH as Auth
+    participant POL as Policy
+    participant PAY as Payment
+    participant RMQ as RabbitMQ
+    participant DB as Database
+
+    Customer->>FE: Login
+    FE->>GW: POST /auth/login
+    GW->>AUTH: Validate credentials
+    AUTH->>DB: Query user
+    AUTH-->>FE: JWT Token
+
+    Customer->>FE: Select policy
+    FE->>GW: POST /policy/buy (JWT)
+    GW->>POL: Create user policy
+    POL->>DB: Save user_policy (PENDING)
+    POL-->>FE: userPolicyId
+
+    FE->>GW: POST /payment/create-order
+    GW->>PAY: Create Razorpay order
+    PAY->>DB: Save transaction (PENDING)
+    PAY-->>FE: orderId + amount
+
+    Note over Customer, FE: Razorpay Checkout
+    Customer->>FE: Complete payment
+    FE->>GW: POST /payment/verify
+    GW->>PAY: Verify Razorpay signature
+
+    alt Valid
+        PAY->>DB: Transaction → SUCCESS
+        PAY->>RMQ: PaymentStatusEvent
+        RMQ->>POL: Saga Consumer
+        POL->>DB: UserPolicy → ACTIVE
+        PAY-->>Customer: Confirmation email
+    else Invalid
+        PAY->>DB: Transaction → FAILED
+        PAY->>RMQ: FAILED event
+        RMQ->>POL: Saga Consumer
+        POL->>DB: UserPolicy → CANCELLED
+    end
+
+    PAY-->>FE: Result
+    FE-->>Customer: Display status
+        </pre>
+    </div>
+</div>
+
+<!-- ════════════════════════ END ════════════════════════ -->
+<div class="end-page">
+    <div class="brand">SmartSure</div>
+    <div class="txt">Confidential Technical Documentation — Group 2 — April 2026</div>
+</div>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#dbeafe',
+            primaryBorderColor: '#2563eb',
+            primaryTextColor: '#1e3a5f',
+            lineColor: '#475569',
+            secondaryColor: '#dcfce7',
+            tertiaryColor: '#f1f5f9',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '14px',
+            noteBkgColor: '#fef3c7',
+            noteBorderColor: '#d97706'
+        },
+        er: { useMaxWidth: true, fontSize: 14 },
+        sequence: { useMaxWidth: true, actorMargin: 60, messageMargin: 35, mirrorActors: false, width: 170 }
+    });
+</script>
+</body>
+</html>
