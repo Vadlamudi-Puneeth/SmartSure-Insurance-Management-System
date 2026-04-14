@@ -23,6 +23,7 @@ public class DataSeeder {
                 System.out.println("\u2705 Automatically fixed Policy Table ID generation!");
             } catch (Exception e) {
                 // Already an identity column, can safely ignore
+                System.out.println(e.getMessage());
             }
 
             // 1.5 AUTO-FIX: BACKFILL COVERAGE FOR EXISTING USER POLICIES

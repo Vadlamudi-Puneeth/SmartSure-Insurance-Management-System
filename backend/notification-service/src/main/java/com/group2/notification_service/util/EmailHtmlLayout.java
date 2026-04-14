@@ -57,7 +57,7 @@ public final class EmailHtmlLayout {
     }
 
     private static boolean looksLikeFullHtmlDocument(String s) {
-        if (s.length() < 10) {
+        if (s.length() < 30) {
             return false;
         }
         String head = s.substring(0, Math.min(50, s.length())).toLowerCase(Locale.ROOT);
@@ -73,7 +73,8 @@ public final class EmailHtmlLayout {
                 || lower.contains("<p") || lower.contains("<div") || lower.contains("<span")
                 || lower.contains("<table") || lower.contains("<ul") || lower.contains("<ol")
                 || lower.contains("<h1") || lower.contains("<h2") || lower.contains("<h3")
-                || lower.contains("<a ");
+                || lower.contains("<a ") || lower.contains("<html") || lower.contains("<body")
+                || lower.contains("<title") || lower.contains("<head") || lower.contains("<!doctype");
     }
 
     private static String plainTextToHtml(String text) {
