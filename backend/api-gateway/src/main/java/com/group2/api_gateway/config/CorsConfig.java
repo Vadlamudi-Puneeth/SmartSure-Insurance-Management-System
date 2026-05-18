@@ -21,7 +21,8 @@ public class CorsConfig {
             "http://smartsureinsurance.work.gd",
             "https://smartsureinsurance.work.gd",
             "http://smartsureinsurance.work.gd.",
-            "https://smartsureinsurance.work.gd."
+            "https://smartsureinsurance.work.gd.",
+            "https://smartsure.20.40.46.104.nip.io"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
