@@ -182,13 +182,37 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: any) {
   );
 }
 
-export function Input({ label, error, id, ...props }: any) {
+export function Input({ label, error, id, type, onKeyDown, onChange, min, ...props }: any) {
   const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+
+  const handleKeyDown = (e: any) => {
+    if (type === 'number') {
+      if (['-', 'e', 'E', '+'].includes(e.key)) {
+        e.preventDefault();
+      }
+    }
+    if (onKeyDown) onKeyDown(e);
+  };
+
+  const handleChange = (e: any) => {
+    if (type === 'number') {
+      const val = parseFloat(e.target.value);
+      if (val < 0) {
+        e.target.value = '0';
+      }
+    }
+    if (onChange) onChange(e);
+  };
+
   return (
     <div className="space-y-1.5">
       {label && <label htmlFor={inputId} className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{label}</label>}
       <input
         id={inputId}
+        type={type}
+        min={type === 'number' && min === undefined ? "0" : min}
+        onKeyDown={handleKeyDown}
+        onChange={handleChange}
         className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 focus:ring-2"
         style={{
           backgroundColor: 'var(--color-bg)',
