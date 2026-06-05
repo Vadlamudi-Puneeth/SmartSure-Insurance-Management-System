@@ -208,7 +208,24 @@ export default function AdminPolicies() {
     policyName: '', description: '', policyTypeId: '',
     premiumAmount: '', coverageAmount: '', durationInMonths: '',
   });
+  const [formErrors, setFormErrors] = useState({
+    premiumAmount: '',
+    coverageAmount: '',
+    durationInMonths: '',
+  });
   const [submitting, setSubmitting] = useState(false);
+
+  const clearFieldError = (field: 'premiumAmount' | 'coverageAmount' | 'durationInMonths') => {
+    setFormErrors(prev => ({ ...prev, [field]: '' }));
+  };
+
+  const validatePositiveNumber = (value: string, fieldLabel: string, wholeNumber = false) => {
+    const parsed = Number(value);
+    if (!value.trim()) return `${fieldLabel} is required`;
+    if (!Number.isFinite(parsed) || parsed <= 0) return `${fieldLabel} must be a positive number`;
+    if (wholeNumber && !Number.isInteger(parsed)) return `${fieldLabel} must be a whole number`;
+    return '';
+  };
 
   const fetchData = async () => {
     if (policies.length === 0) setLoading(true);
@@ -236,6 +253,7 @@ export default function AdminPolicies() {
   const openCreate = () => {
     setEditingPolicy(null);
     setForm({ policyName: '', description: '', policyTypeId: '', premiumAmount: '', coverageAmount: '', durationInMonths: '' });
+    setFormErrors({ premiumAmount: '', coverageAmount: '', durationInMonths: '' });
     setShowModal(true);
   };
 
@@ -249,13 +267,29 @@ export default function AdminPolicies() {
       coverageAmount: policy.coverageAmount || '',
       durationInMonths: policy.durationInMonths || '',
     });
+    setFormErrors({ premiumAmount: '', coverageAmount: '', durationInMonths: '' });
     setShowModal(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.policyName || !form.description || !form.premiumAmount || !form.coverageAmount || !form.durationInMonths) {
-      toast.error('Please fill in all required fields'); return;
+    if (!form.policyName || !form.description) {
+      toast.error('Please fill in all required fields');
+      return;
     }
+
+    const nextErrors = {
+      premiumAmount: validatePositiveNumber(form.premiumAmount, 'Premium amount'),
+      coverageAmount: validatePositiveNumber(form.coverageAmount, 'Coverage amount'),
+      durationInMonths: validatePositiveNumber(form.durationInMonths, 'Duration', true),
+    };
+
+    setFormErrors(nextErrors);
+
+    if (nextErrors.premiumAmount || nextErrors.coverageAmount || nextErrors.durationInMonths) {
+      toast.error('Please enter positive values for premium, coverage, and duration');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const data = {
@@ -531,22 +565,40 @@ export default function AdminPolicies() {
             <Input
               label="Premium Amount (₹) *"
               type="number"
+              min="0.01"
+              step="0.01"
               value={form.premiumAmount}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, premiumAmount: e.target.value }))}
+              error={formErrors.premiumAmount}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setForm(p => ({ ...p, premiumAmount: e.target.value }));
+                clearFieldError('premiumAmount');
+              }}
               placeholder="e.g., 2000"
             />
             <Input
               label="Coverage Amount (₹) *"
               type="number"
+              min="0.01"
+              step="0.01"
               value={form.coverageAmount}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, coverageAmount: e.target.value }))}
+              error={formErrors.coverageAmount}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setForm(p => ({ ...p, coverageAmount: e.target.value }));
+                clearFieldError('coverageAmount');
+              }}
               placeholder="e.g., 500000"
             />
             <Input
               label="Duration (months) *"
               type="number"
+              min="1"
+              step="1"
               value={form.durationInMonths}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, durationInMonths: e.target.value }))}
+              error={formErrors.durationInMonths}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setForm(p => ({ ...p, durationInMonths: e.target.value }));
+                clearFieldError('durationInMonths');
+              }}
               placeholder="e.g., 12"
             />
           </div>
